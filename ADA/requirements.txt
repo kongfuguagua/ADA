@@ -1,0 +1,11 @@
+grid2op
+numpy
+lightsim2grid
+openai
+langchain-openai
+langchain-core
+markdown
+tqdm
+python-dotenv
+gurobipy
+dash<3.0.0
