@@ -2,43 +2,72 @@
 """
 Grid2Op 环境封装
 提供统一的环境交互接口
+
+约定：
+- Grid2OpEnvironment: 环境管理器，提供高级接口
+- Grid2OpSimulator: 仿真器，用于 Judger 评估
+- create_grid2op_env: 便捷函数，快速创建环境
 """
 
 import logging
-from typing import Union, Optional, Dict, Any, Tuple, List
+from typing import Union, Optional, Dict, Any, Tuple
 import numpy as np
 
-from .config import EnvConfig, get_env_config
+from .config import EnvConfig, get_env_config, list_env_configs, Competition
 
 logger = logging.getLogger(__name__)
 
 
 def _get_backend(use_lightsim: bool = True):
-    """获取仿真后端"""
+    """
+    获取仿真后端
+    
+    Args:
+        use_lightsim: 如果为 True，尝试使用 LightSim2Grid（更快）
+        
+    Returns:
+        后端实例
+    """
     if use_lightsim:
         try:
             from lightsim2grid import LightSimBackend
-            logger.info("使用 LightSim2Grid 后端")
+            logger.info("使用 LightSim2Grid 后端（快速仿真）")
             return LightSimBackend()
         except ImportError:
-            logger.warning("LightSim2Grid 不可用，回退到 PandaPower")
+            logger.warning(
+                "LightSim2Grid 不可用，回退到 PandaPower 后端。"
+                "安装方法: pip install lightsim2grid"
+            )
     
     from grid2op.Backend import PandaPowerBackend
+    logger.info("使用 PandaPower 后端")
     return PandaPowerBackend()
 
 
 def _get_action_class(action_class_name: Optional[str]):
-    """根据名称获取动作类"""
+    """
+    根据名称获取动作类
+    
+    Args:
+        action_class_name: 动作类名称
+        
+    Returns:
+        动作类或 None
+    """
     if action_class_name is None:
         return None
     
-    from grid2op.Action import (
-        TopologyAction,
-        TopologyAndDispatchAction,
-        PlayableAction,
-        PowerlineSetAction,
-        DontAct,
-    )
+    try:
+        from grid2op.Action import (
+            TopologyAction,
+            TopologyAndDispatchAction,
+            PlayableAction,
+            PowerlineSetAction,
+            DontAct,
+        )
+    except ImportError:
+        logger.error("无法导入 grid2op.Action，请确保已安装 grid2op")
+        return None
     
     action_classes = {
         "TopologyAction": TopologyAction,
@@ -48,7 +77,11 @@ def _get_action_class(action_class_name: Optional[str]):
         "DontAct": DontAct,
     }
     
-    return action_classes.get(action_class_name)
+    if action_class_name not in action_classes:
+        logger.warning(f"未知动作类: {action_class_name}，使用默认值")
+        return None
+    
+    return action_classes[action_class_name]
 
 
 class Grid2OpEnvironment:
@@ -82,8 +115,22 @@ class Grid2OpEnvironment:
         self._seed = seed
     
     def _create_env(self, seed: Optional[int] = None, **kwargs):
-        """创建 Grid2Op 环境"""
-        import grid2op
+        """
+        创建 Grid2Op 环境
+        
+        Args:
+            seed: 随机种子
+            **kwargs: 传递给 grid2op.make() 的额外参数
+            
+        Returns:
+            Grid2Op 环境实例
+        """
+        try:
+            import grid2op
+        except ImportError:
+            raise ImportError(
+                "需要安装 grid2op。使用: pip install grid2op"
+            )
         
         make_params = self.config.to_dict()
         make_params["backend"] = _get_backend(self.config.use_lightsim)
@@ -94,13 +141,23 @@ class Grid2OpEnvironment:
         
         make_params.update(kwargs)
         
-        env = grid2op.make(**make_params)
+        try:
+            env = grid2op.make(**make_params)
+        except Exception as e:
+            logger.error(f"创建环境失败: {e}")
+            raise
         
         if seed is not None:
             env.seed(seed)
+            logger.info(f"环境随机种子设置为: {seed}")
         
         logger.info(f"环境创建成功: {self.config.name}")
-        logger.info(f"  线路数: {env.n_line}, 变电站数: {env.n_sub}")
+        logger.info(f"  - 线路数: {env.n_line}")
+        logger.info(f"  - 变电站数: {env.n_sub}")
+        logger.info(f"  - 发电机数: {env.n_gen}")
+        logger.info(f"  - 负荷数: {env.n_load}")
+        if hasattr(env, 'n_storage') and env.n_storage > 0:
+            logger.info(f"  - 储能单元数: {env.n_storage}")
         
         return env
     
@@ -226,6 +283,7 @@ class Grid2OpEnvironment:
         """关闭环境"""
         if self.env is not None:
             self.env.close()
+            logger.info("环境已关闭")
 
 
 class Grid2OpSimulator:
@@ -332,44 +390,100 @@ class Grid2OpSimulator:
         return self.env.get_observation_info()
 
 
+def create_grid2op_env(
+    config: Union[str, EnvConfig],
+    seed: Optional[int] = None,
+    **kwargs
+) -> Grid2OpEnvironment:
+    """
+    便捷函数：创建 Grid2Op 环境管理器
+    
+    这是创建环境的推荐方式，返回 Grid2OpEnvironment 实例。
+    
+    Args:
+        config: 配置名称（字符串）或 EnvConfig 对象
+        seed: 随机种子，用于可重复性
+        **kwargs: 传递给环境创建的额外参数
+        
+    Returns:
+        Grid2OpEnvironment 实例
+        
+    Examples:
+        >>> # 使用配置名称
+        >>> env = create_grid2op_env("wcci_2022", seed=42)
+        >>> obs = env.reset()
+        
+        >>> # 使用 EnvConfig 对象
+        >>> from env.config import WCCI_2022
+        >>> env = create_grid2op_env(WCCI_2022, seed=42)
+        
+        >>> # 使用环境名称（直接使用 Grid2Op 环境名）
+        >>> env = create_grid2op_env("l2rpn_wcci_2022", seed=42)
+    """
+    # 如果传入的是字符串，尝试作为配置名称查找
+    if isinstance(config, str):
+        # 先尝试作为配置名称
+        try:
+            config = get_env_config(config)
+        except KeyError:
+            # 如果不是已知配置，创建一个临时配置
+            logger.warning(
+                f"'{config}' 不是已知配置，将作为 Grid2Op 环境名使用。"
+                f"可用配置: {list_env_configs()}"
+            )
+            config = EnvConfig(
+                name=f"Custom: {config}",
+                env_name=config,
+                competition=Competition.SANDBOX,
+                description=f"自定义环境: {config}"
+            )
+    
+    return Grid2OpEnvironment(config, seed=seed, **kwargs)
+
+
 # ============= 测试代码 =============
 if __name__ == "__main__":
     print("测试 Grid2Op 环境封装")
     print("=" * 50)
     
     try:
-        # 创建沙盒环境
-        env = Grid2OpEnvironment("sandbox_case14", seed=42)
+        # 测试便捷函数
+        print("\n1. 测试 create_grid2op_env 函数:")
+        env = create_grid2op_env("sandbox_case14", seed=42)
         obs = env.reset()
+        print("   ✓ 环境创建成功")
         
-        print("\n电网信息:")
+        print("\n2. 电网信息:")
         grid_info = env.get_grid_info()
         print(f"  线路数: {grid_info['n_line']}")
         print(f"  变电站数: {grid_info['n_sub']}")
         print(f"  发电机数: {grid_info['n_gen']}")
         
-        print("\n当前状态:")
+        print("\n3. 当前状态:")
         obs_info = env.get_observation_info()
         print(f"  最大负载率: {obs_info['max_rho']:.2%}")
         print(f"  总负荷: {obs_info['total_load']:.2f} MW")
         print(f"  总发电: {obs_info['total_gen']:.2f} MW")
         
-        print("\nPlanner 状态:")
+        print("\n4. Planner 状态:")
         planner_state = env.get_state_for_planner()
         print(f"  时间步: {planner_state['timestep']}")
         print(f"  过载线路: {planner_state['lines_in_overflow']}")
         
-        # 测试仿真器
-        print("\n测试仿真器:")
+        print("\n5. 测试仿真器:")
         simulator = Grid2OpSimulator(env)
         result = simulator.run({})
         print(f"  仿真成功: {result['success']}")
         print(f"  安全: {result.get('is_safe', 'N/A')}")
         
         env.close()
-        print("\n测试完成!")
+        print("\n✓ 测试完成!")
         
     except ImportError as e:
-        print(f"Grid2Op 未安装: {e}")
+        print(f"✗ Grid2Op 未安装: {e}")
         print("请运行: pip install grid2op lightsim2grid")
+    except Exception as e:
+        print(f"✗ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
 

@@ -17,6 +17,7 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).parent))
 
 # 导入配置
+from ADA.env import Grid2OpEnvironment
 from config import SystemConfig, LLMConfig
 
 # 导入数据契约
@@ -60,7 +61,7 @@ class ADAOrchestrator:
         system_config: SystemConfig,
         llm_config: LLMConfig,
         kb_storage_path: str = None,
-        env=None
+        env:Grid2OpEnvironment=None
     ):
         """
         初始化编排器
@@ -75,8 +76,8 @@ class ADAOrchestrator:
             ValueError: API 配置无效
         """
         self.config = system_config
-        self.llm_config = llm_config
         self.env = env
+        self.llm_config = llm_config
         
         # 验证并初始化 LLM 和 Embedding
         self._validate_config()
@@ -302,6 +303,11 @@ class ADAOrchestrator:
     def _get_env_state(self) -> EnvironmentState:
         """从环境获取状态"""
         if self.env is not None and hasattr(self.env, 'get_state_for_planner'):
+            # 确保环境已 reset（如果 current_obs 为 None，则自动 reset）
+            if hasattr(self.env, 'current_obs') and self.env.current_obs is None:
+                logger.info("环境未重置，正在重置...")
+                self.env.reset()
+            
             grid_state = self.env.get_state_for_planner()
             return EnvironmentState(
                 user_instruction="优化电网调度，保持系统稳定运行",

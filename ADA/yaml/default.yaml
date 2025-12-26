@@ -12,7 +12,7 @@ system:
   log_dir: "log"
   
   # 知识库存储路径
-  knowledge_storage_path: "/Users/yangsiyu/Desktop/ADA/ADA/knowledgebase/storage"
+  knowledge_storage_path: "C:\\Users\\a2550\\Desktop\\ADA\\ADA\\knowledgebase\\storage"
   knowledge_top_k: 3
   knowledge_chunk_size: 600
   knowledge_chunk_overlap: 150
@@ -61,7 +61,7 @@ llm:
 env:
   # Grid2Op 环境配置（可选）
   type: "grid2op"  # grid2op, mock, none
-  env_name: "l2rpn_wcci_2022"  # Grid2Op 环境名称
+  env_name: "wcci_2022"  # Grid2Op 环境名称
   # 如果 type 为 none，则使用默认模拟环境
 
 # ============= 实验配置 =============

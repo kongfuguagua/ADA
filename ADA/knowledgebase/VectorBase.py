@@ -160,24 +160,26 @@ class VectorStore:
         Args:
             path: 存储路径
         """
+        from utils.json_utils import safe_json_dump
+        
         os.makedirs(path, exist_ok=True)
         
         # 保存文档
         with open(f"{path}/documents.json", 'w', encoding='utf-8') as f:
-            json.dump(self.documents, f, ensure_ascii=False, indent=2)
+            safe_json_dump(self.documents, f, ensure_ascii=False, indent=2)
         
         # 保存向量
         if self.vectors:
             with open(f"{path}/vectors.json", 'w', encoding='utf-8') as f:
-                json.dump(self.vectors, f)
+                safe_json_dump(self.vectors, f)
         
         # 保存元数据
         with open(f"{path}/metadata.json", 'w', encoding='utf-8') as f:
-            json.dump(self.metadata, f, ensure_ascii=False, indent=2)
+            safe_json_dump(self.metadata, f, ensure_ascii=False, indent=2)
         
         # 保存 ID
         with open(f"{path}/ids.json", 'w', encoding='utf-8') as f:
-            json.dump(self.ids, f)
+            safe_json_dump(self.ids, f)
     
     def load(self, path: str) -> bool:
         """

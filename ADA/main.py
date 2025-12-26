@@ -24,6 +24,7 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).parent))
 
 # 导入配置
+from ADA.env import Grid2OpEnvironment
 from config import SystemConfig, LLMConfig
 from config.yaml_loader import (
     load_config_from_yaml,
@@ -40,11 +41,11 @@ from orchestrator import ADAOrchestrator
 
 # 导入环境（可选）
 try:
-    from env.grid2op_env import create_grid2op_env
+    from env import create_grid2op_env
     HAS_GRID2OP = True
-except ImportError:
+except ImportError as e:
     HAS_GRID2OP = False
-    print("警告: Grid2Op 环境模块未找到，将使用模拟环境")
+    logger.warning(f"Grid2Op 环境模块未找到: {e}，将使用模拟环境")
 
 logger = get_logger("Main")
 
@@ -73,7 +74,7 @@ def parse_args():
     parser.add_argument(
         "-f", "--config",
         type=str,
-        default='/Users/yangsiyu/Desktop/ADA/ADA/yaml/default.yaml',
+        default=r'C:\Users\a2550\Desktop\ADA\ADA\yaml\default.yaml',
         help="YAML 配置文件路径（如: yaml/default.yaml）"
     )
     
@@ -126,7 +127,7 @@ def init_swanlab(config_dict: Dict[str, Any], enabled: bool = True) -> Optional[
         return None
 
 
-def init_environment(config_dict: Dict[str, Any]):
+def init_environment(config_dict: Dict[str, Any])->Grid2OpEnvironment:
     """
     初始化环境
     
@@ -144,7 +145,9 @@ def init_environment(config_dict: Dict[str, Any]):
         logger.info(f"初始化 Grid2Op 环境: {env_name}")
         try:
             env = create_grid2op_env(env_name)
-            logger.info("Grid2Op 环境初始化成功")
+            # 创建环境后立即 reset，确保有初始观测
+            env.reset()
+            logger.info("Grid2Op 环境初始化成功并已重置")
             return env
         except Exception as e:
             logger.error(f"Grid2Op 环境初始化失败: {e}")

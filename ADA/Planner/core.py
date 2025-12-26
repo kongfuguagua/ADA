@@ -12,6 +12,9 @@ from typing import Optional, List, Dict, Any
 # 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# 导入安全的 JSON 序列化工具
+from utils.json_utils import safe_json_dumps
+
 from utils.const import (
     EnvironmentState,
     OptimizationProblem,
@@ -177,7 +180,7 @@ class PlannerAgent(BasePlanner):
             
             # 执行工具调用
             result = self.tools.execute(action.tool_name, **action.params)
-            result_str = json.dumps(result, ensure_ascii=False, indent=2)
+            result_str = safe_json_dumps(result, ensure_ascii=False, indent=2)
             
             # 记录步骤
             aug_step = AugmentationStep(
@@ -232,7 +235,7 @@ class PlannerAgent(BasePlanner):
         lines = []
         for i, step in enumerate(self._tool_chain, 1):
             lines.append(f"{i}. {step.tool_selected}")
-            lines.append(f"   输入: {json.dumps(step.tool_input, ensure_ascii=False)}")
+            lines.append(f"   输入: {safe_json_dumps(step.tool_input, ensure_ascii=False)}")
             lines.append(f"   输出: {step.tool_output[:100]}...")
         
         return "\n".join(lines)

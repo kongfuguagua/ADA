@@ -18,6 +18,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import SystemConfig
 
+# 导入 JSON 工具
+from .json_utils import convert_to_serializable, safe_json_dumps
+
 
 class ADAFormatter(logging.Formatter):
     """自定义日志格式化器，支持结构化输出"""
@@ -57,7 +60,12 @@ class ADAFormatter(logging.Formatter):
         # 额外数据（如果有）
         extra_str = ""
         if hasattr(record, 'extra_data') and record.extra_data:
-            extra_str = f" | data={json.dumps(record.extra_data, ensure_ascii=False)}"
+            try:
+                # 使用安全的 JSON 序列化
+                extra_str = f" | data={safe_json_dumps(record.extra_data, ensure_ascii=False)}"
+            except (TypeError, ValueError) as e:
+                # 如果序列化失败，使用字符串表示
+                extra_str = f" | data=<序列化失败: {str(e)}>"
         
         return f"[{timestamp}] {level_str} [{module}] {message}{extra_str}"
 
@@ -108,7 +116,8 @@ class ADALogger:
             None
         )
         if extra_data:
-            record.extra_data = extra_data
+            # 转换 numpy 类型为可序列化类型
+            record.extra_data = convert_to_serializable(extra_data)
         else:
             record.extra_data = None
         self.logger.handle(record)

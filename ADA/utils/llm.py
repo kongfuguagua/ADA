@@ -187,13 +187,15 @@ class OpenAIChat(BaseLLM):
         system_prompt: str = None
     ) -> BaseModel:
         """结构化输出（JSON Mode）"""
+        from .json_utils import safe_json_dumps
+        
         schema = response_model.model_json_schema()
         
         structured_prompt = f"""{prompt}
 
 请严格按照以下 JSON Schema 格式输出：
 ```json
-{json.dumps(schema, ensure_ascii=False, indent=2)}
+{safe_json_dumps(schema, ensure_ascii=False, indent=2)}
 ```
 
 只输出 JSON，不要包含其他内容。

@@ -162,11 +162,15 @@ print(f"算法: {result['solution'].algorithm_used}")
 
 ```python
 from main import ADAOrchestrator
-from env.grid2op_env import Grid2OpEnvironment
-from env.config import SANDBOX_CASE14
+from env import create_grid2op_env
 
-# 创建环境
-env = Grid2OpEnvironment(SANDBOX_CASE14)
+# 方式1: 使用配置名称创建环境（推荐）
+env = create_grid2op_env("wcci_2022", seed=42)
+env.reset()
+
+# 方式2: 使用预定义配置
+from env import WCCI_2022
+env = create_grid2op_env(WCCI_2022, seed=42)
 env.reset()
 
 # 创建编排器并绑定环境
@@ -175,6 +179,21 @@ orchestrator = ADAOrchestrator(env=env)
 # 运行一个回合
 result = orchestrator.run_episode(max_steps=100)
 print(f"总奖励: {result['total_reward']}")
+```
+
+#### 支持的 L2RPN 环境
+
+```python
+from env import list_env_configs, get_env_config
+
+# 列出所有可用配置
+print(list_env_configs())
+# ['neurips_2020_track1', 'neurips_2020_track2', 'icaps_2021', 'wcci_2022', 'sandbox_case14']
+
+# 获取配置信息
+config = get_env_config("wcci_2022")
+print(config.name)  # WCCI 2022 - 未来能源与碳中和
+print(config.has_storage)  # True
 ```
 
 ## 注意事项

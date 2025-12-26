@@ -1,0 +1,43 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Current File with Arguments",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": "${command:pickArgs}",
+            "envFile": "${workspaceFolder}/.env",
+            "env": {
+                // 如果 .env 文件不存在，可以在这里直接设置环境变量
+                // "CLOUD_MODEL": "Qwen3-32B",
+                // "CLOUD_API_KEY": "your-api-key",
+                // "CLOUD_BASE_URL": "https://ai.api.coregpu.cn/v1/",
+                // "OPENAI_API_MODEL": "Pro/BAAI/bge-m3",
+                // "OPENAI_API_KEY": "your-api-key",
+                // "OPENAI_BASE_URL": "https://api.siliconflow.cn/v1"
+            }
+        },
+        {
+            "name": "Python Debugger: ADA main.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/ADA/main.py",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/ADA/.env",
+            "env": {
+                // 如果 .env 文件不存在，可以在这里直接设置环境变量
+                // "CLOUD_MODEL": "Qwen3-32B",
+                // "CLOUD_API_KEY": "your-api-key",
+                // "CLOUD_BASE_URL": "https://ai.api.coregpu.cn/v1/",
+                // "OPENAI_API_MODEL": "Pro/BAAI/bge-m3",
+                // "OPENAI_API_KEY": "your-api-key",
+                // "OPENAI_BASE_URL": "https://api.siliconflow.cn/v1"
+            }
+        }
+    ]
+}

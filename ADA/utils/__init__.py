@@ -45,6 +45,7 @@ from .interact import (
 )
 
 from .logger import get_logger
+from .json_utils import safe_json_dumps, safe_json_dump, convert_to_serializable
 
 from .llm import BaseLLM, OpenAIChat
 from .embeddings import BaseEmbeddings, OpenAIEmbedding
@@ -86,4 +87,7 @@ __all__ = [
     
     # 工具函数
     'get_logger',
+    'safe_json_dumps',
+    'safe_json_dump',
+    'convert_to_serializable',
 ]
