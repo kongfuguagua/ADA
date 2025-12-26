@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-ADA 基础接口定义
-定义所有服务和 Agent 的抽象基类
+ADA Agent 接口定义
+定义所有 Agent 的抽象基类
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, List, Dict, Optional, Type
-from pydantic import BaseModel
+from typing import Any, List, Dict, Optional
 
 from .const import (
     KnowledgeItem,
@@ -19,65 +18,55 @@ from .const import (
     SolverAlgorithmMeta,
 )
 
+# 从 llm 模块重新导出 BaseLLM（保持向后兼容）
+from .llm import BaseLLM
 
-# ================= 1. 基础服务接口 (Infrastructure) =================
 
-class BaseLLM(ABC):
-    """LLM 服务通用接口"""
+# ================= 1. 基础服务接口 =================
+
+class BaseTool(ABC):
+    """所有工具（仿真器、查询器）的基类"""
     
+    @property
     @abstractmethod
-    def chat(self, prompt: str, history: List[Dict[str, str]] = None) -> str:
-        """
-        普通对话
-        
-        Args:
-            prompt: 用户输入
-            history: 对话历史 [{"role": "user/assistant", "content": "..."}]
-        
-        Returns:
-            LLM 的回复文本
-        """
+    def name(self) -> str:
+        """工具名称"""
+        pass
+    
+    @property
+    @abstractmethod
+    def description(self) -> str:
+        """工具描述"""
         pass
     
     @abstractmethod
-    def generate_structured(
-        self, 
-        prompt: str, 
-        response_model: Type[BaseModel],
-        history: List[Dict[str, str]] = None
-    ) -> BaseModel:
+    def execute(self, **kwargs) -> Any:
         """
-        强制输出特定 Pydantic 对象 (JSON Mode)
+        执行工具
         
         Args:
-            prompt: 用户输入
-            response_model: 期望的输出模型类型
-            history: 对话历史
+            **kwargs: 工具参数
         
         Returns:
-            解析后的 Pydantic 对象
+            工具执行结果
         """
         pass
     
-    @abstractmethod
-    def chat_with_tools(
-        self,
-        prompt: str,
-        tools: List[Dict[str, Any]],
-        history: List[Dict[str, str]] = None
-    ) -> Dict[str, Any]:
+    @property
+    def schema(self) -> Dict[str, Any]:
         """
-        带工具调用的对话
-        
-        Args:
-            prompt: 用户输入
-            tools: 工具定义列表
-            history: 对话历史
-        
-        Returns:
-            包含 content 和 tool_calls 的字典
+        返回 JSON Schema 供 LLM 理解参数
+        子类可覆盖此方法提供详细的参数定义
         """
-        pass
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
 
 
 class BaseVectorStore(ABC):
@@ -140,51 +129,6 @@ class BaseVectorStore(ABC):
         pass
 
 
-class BaseTool(ABC):
-    """所有工具（仿真器、查询器）的基类"""
-    
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """工具名称"""
-        pass
-    
-    @property
-    @abstractmethod
-    def description(self) -> str:
-        """工具描述"""
-        pass
-    
-    @abstractmethod
-    def execute(self, **kwargs) -> Any:
-        """
-        执行工具
-        
-        Args:
-            **kwargs: 工具参数
-        
-        Returns:
-            工具执行结果
-        """
-        pass
-    
-    @property
-    def schema(self) -> Dict[str, Any]:
-        """
-        返回 JSON Schema 供 LLM 理解参数
-        子类可覆盖此方法提供详细的参数定义
-        """
-        return {
-            "name": self.name,
-            "description": self.description,
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
-        }
-
-
 class BaseSimulator(ABC):
     """物理仿真器接口"""
     
@@ -212,7 +156,7 @@ class BaseSimulator(ABC):
         pass
 
 
-# ================= 2. 核心 Agent 接口 =================
+# ================= 2. Agent 接口 =================
 
 class BasePlanner(ABC):
     """规划智能体接口"""
@@ -273,7 +217,7 @@ class BaseSolverStrategy(ABC):
         获取算法能力向量 ψ(A)
         
         Returns:
-            能力向量
+            能力向量 [凸处理, 非凸处理, 约束处理, 速度, 全局最优性]
         """
         caps = self.meta.capabilities
         return [
@@ -397,18 +341,3 @@ class BaseSummarizer(ABC):
             提取的知识项（如果值得保存）
         """
         pass
-
-
-# ============= 测试代码 =============
-if __name__ == "__main__":
-    print("接口定义模块测试")
-    print("所有抽象基类已定义:")
-    print("  - BaseLLM: LLM 服务接口")
-    print("  - BaseVectorStore: 向量数据库接口")
-    print("  - BaseTool: 工具基类")
-    print("  - BaseSimulator: 仿真器接口")
-    print("  - BasePlanner: 规划智能体接口")
-    print("  - BaseSolverStrategy: 求解策略接口")
-    print("  - BaseSolver: 求解智能体接口")
-    print("  - BaseJudger: 评估智能体接口")
-    print("  - BaseSummarizer: 总结智能体接口")

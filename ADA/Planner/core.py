@@ -21,9 +21,10 @@ from utils.const import (
     ToolAction,
     AugmentationStep,
 )
-from utils.interact import BasePlanner, BaseLLM
+from utils.interact import BasePlanner
+from utils.llm import BaseLLM
 from utils.logger import get_logger
-from config import get_system_config
+from config import SystemConfig
 
 from knowledgebase.service import KnowledgeService
 from .prompt import PlannerPrompts
@@ -46,7 +47,8 @@ class PlannerAgent(BasePlanner):
         llm: BaseLLM,
         tools: ToolRegistry = None,
         kb: KnowledgeService = None,
-        max_augmentation_steps: int = None
+        max_augmentation_steps: int = None,
+        config: SystemConfig = None
     ):
         """
         初始化 Planner
@@ -56,13 +58,14 @@ class PlannerAgent(BasePlanner):
             tools: 工具注册表
             kb: 知识库服务
             max_augmentation_steps: 最大增广步数
+            config: 系统配置（如果为 None 则创建新实例）
         """
         self.llm = llm
         self.tools = tools or create_default_registry()
         self.kb = kb
         
-        config = get_system_config()
-        self.max_steps = max_augmentation_steps or config.planner_max_augmentation_steps
+        self.config = config or SystemConfig()
+        self.max_steps = max_augmentation_steps or self.config.planner_max_augmentation_steps
         
         # 记录本次规划的工具调用链
         self._tool_chain: List[AugmentationStep] = []
@@ -318,64 +321,5 @@ class PlannerAgent(BasePlanner):
 
 # ============= 测试代码 =============
 if __name__ == "__main__":
-    from knowledgebase.LLM import MockLLM
-    from knowledgebase.Embeddings import MockEmbedding
-    from knowledgebase.service import KnowledgeService
-    import tempfile
-    
-    print("测试 PlannerAgent:")
-    
-    # 创建模拟 LLM
-    mock_llm = MockLLM()
-    mock_llm.set_response("状态增广", "FINISH")
-    mock_llm.set_response("建立数学优化", '''```json
-{
-    "objective_function_latex": "\\\\min \\\\sum_{i} c_i P_i",
-    "objective_function_code": "sum(c[i] * P[i] for i in range(n))",
-    "is_minimization": true,
-    "constraints_latex": ["\\\\sum P_i = D", "P_i \\\\geq 0"],
-    "constraints_code": ["sum(P) == D", "P >= 0"],
-    "variables": [
-        {"name": "P1", "type": "continuous", "lower_bound": 0, "upper_bound": 100, "description": "机组1出力"},
-        {"name": "P2", "type": "continuous", "lower_bound": 0, "upper_bound": 80, "description": "机组2出力"}
-    ],
-    "parameters": {"c1": 10, "c2": 15, "D": 120},
-    "modeling_rationale": "最小化发电成本，满足负载平衡"
-}
-```''')
-    
-    # 创建知识库
-    temp_dir = tempfile.mkdtemp()
-    kb = KnowledgeService(
-        embedding_model=MockEmbedding(),
-        storage_path=temp_dir
-    )
-    
-    # 创建 Planner
-    planner = PlannerAgent(
-        llm=mock_llm,
-        kb=kb,
-        max_augmentation_steps=3
-    )
-    
-    # 测试规划
-    state = EnvironmentState(
-        user_instruction="优化发电调度，最小化成本",
-        real_data={"load": 120.0, "price": 0.5}
-    )
-    
-    problem = planner.plan(state)
-    
-    print(f"\n生成的优化问题:")
-    print(f"  目标函数: {problem.objective_function_latex}")
-    print(f"  变量数: {len(problem.variables)}")
-    print(f"  约束数: {len(problem.constraints_latex)}")
-    print(f"  参数: {problem.parameters}")
-    print(f"  建模理由: {problem.modeling_rationale}")
-    
-    print(f"\n工具调用链: {len(planner.get_tool_chain())} 步")
-    
-    # 清理
-    import shutil
-    shutil.rmtree(temp_dir, ignore_errors=True)
-    print("\n测试完成")
+    print("Planner 模块测试需要配置 LLM API")
+    print("请运行 python -m test.test_all 进行完整测试")

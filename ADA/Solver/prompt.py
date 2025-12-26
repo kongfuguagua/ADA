@@ -26,22 +26,18 @@ class SolverPrompts:
 变量定义: {variables}
 
 ## 分析要求
-请判断以下特征：
-1. 问题是否是凸优化问题？
-2. 目标函数是否是线性的？
-3. 非线性程度如何（0-1）？
-4. 约束的紧迫程度如何（0-1）？
-5. 是否包含整数/二元变量？
+请判断以下特征（每个特征用 0-1 的分数表示）：
+1. 非凸性程度 (0=凸, 1=高度非凸)
+2. 非线性程度 (0=线性, 1=高度非线性)
+3. 约束紧迫度 (0=宽松, 1=非常紧)
 
 请用 JSON 格式回答：
 ```json
 {{
-    "is_convex": true/false,
-    "is_linear": true/false,
+    "non_convexity_score": 0.0-1.0,
     "non_linearity_score": 0.0-1.0,
     "constraint_stiffness": 0.0-1.0,
-    "has_integer_variables": true/false,
-    "analysis_rationale": "分析理由"
+    "analysis": "分析理由"
 }}
 ```
 """
@@ -94,4 +90,3 @@ class SolverPrompts:
             features=features,
             algorithms=algorithms
         )
-

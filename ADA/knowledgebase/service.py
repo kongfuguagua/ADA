@@ -6,7 +6,6 @@
 
 import os
 import sys
-import uuid
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
@@ -14,12 +13,12 @@ from typing import List, Optional, Dict, Any
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.const import KnowledgeItem, KnowledgeType
-from utils.interact import BaseVectorStore, BaseLLM
-from config import get_system_config
+from utils.interact import BaseVectorStore
+from utils.embeddings import BaseEmbeddings, OpenAIEmbedding
+from utils.llm import BaseLLM
+from config import SystemConfig
 
 from .VectorBase import VectorStore
-from .Embeddings import BaseEmbeddings, OpenAIEmbedding, MockEmbedding
-from .LLM import OpenAIChat, MockLLM
 
 
 class KnowledgeService:
@@ -40,34 +39,28 @@ class KnowledgeService:
         
         Args:
             vector_store: 向量存储实例
-            embedding_model: Embedding 模型
+            embedding_model: Embedding 模型 (必须提供)
             llm: LLM 模型（用于知识提炼）
             storage_path: 持久化路径
+        
+        Raises:
+            ValueError: 未提供 embedding_model
         """
-        config = get_system_config()
+        if embedding_model is None:
+            raise ValueError("必须提供 embedding_model 参数")
+        
+        config = SystemConfig()
         
         self.storage_path = storage_path or str(config.get_knowledge_path())
         self.top_k = config.knowledge_top_k
         
         # 初始化组件
-        self.embedding = embedding_model or self._create_default_embedding()
+        self.embedding = embedding_model
         self.vector_store = vector_store or VectorStore()
         self.llm = llm
         
         # 尝试加载已有数据
         self._try_load()
-    
-    def _create_default_embedding(self) -> BaseEmbeddings:
-        """创建默认的 Embedding 模型"""
-        try:
-            if os.getenv("OPENAI_API_KEY"):
-                return OpenAIEmbedding()
-            else:
-                print("警告: 未配置 OPENAI_API_KEY，使用 MockEmbedding")
-                return MockEmbedding()
-        except Exception as e:
-            print(f"创建 Embedding 模型失败: {e}，使用 MockEmbedding")
-            return MockEmbedding()
     
     def _try_load(self) -> None:
         """尝试加载已有数据"""
@@ -310,70 +303,3 @@ class KnowledgeService:
     
     def __repr__(self) -> str:
         return f"KnowledgeService(items={len(self)}, path='{self.storage_path}')"
-
-
-# ============= 测试代码 =============
-if __name__ == "__main__":
-    import tempfile
-    import shutil
-    
-    print("测试 KnowledgeService:")
-    
-    # 使用临时目录
-    temp_dir = tempfile.mkdtemp()
-    
-    try:
-        # 创建服务（使用 MockEmbedding）
-        service = KnowledgeService(
-            embedding_model=MockEmbedding(),
-            storage_path=temp_dir
-        )
-        
-        # 添加任务知识
-        tk_id = service.add_knowledge(
-            "电网调度优化问题通常建模为：min Σc_i*P_i，约束包括功率平衡和线路容量",
-            KnowledgeType.TK,
-            {"source": "test"}
-        )
-        print(f"添加 TK: {tk_id}")
-        
-        # 添加动作知识
-        ak_id = service.add_knowledge(
-            "当负载预测不确定时，应先调用天气预报工具获取气象数据",
-            KnowledgeType.AK,
-            {"source": "test"}
-        )
-        print(f"添加 AK: {ak_id}")
-        
-        print(f"\n知识库状态: {service}")
-        
-        # 测试检索
-        print("\n检索任务知识:")
-        tk_results = service.query_task_knowledge("电网优化调度")
-        for item in tk_results:
-            print(f"  [{item.metadata.get('score', 0):.4f}] {item.content[:50]}...")
-        
-        print("\n检索动作知识:")
-        ak_results = service.query_action_knowledge("负载预测")
-        for item in ak_results:
-            print(f"  [{item.metadata.get('score', 0):.4f}] {item.content[:50]}...")
-        
-        # 测试上下文生成
-        print("\n生成上下文:")
-        context = service.get_context_string("电网调度")
-        print(context)
-        
-        # 测试更新
-        service.update_knowledge(tk_id, "更新后的任务知识内容")
-        print("\n更新知识成功")
-        
-        # 测试删除
-        service.delete_knowledge(ak_id)
-        print("删除知识成功")
-        
-        print(f"\n最终状态: {service}")
-        
-    finally:
-        # 清理临时目录
-        shutil.rmtree(temp_dir, ignore_errors=True)
-        print("\n测试完成，已清理临时文件")

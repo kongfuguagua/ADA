@@ -15,9 +15,10 @@ from dataclasses import dataclass, field
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.const import ExecutionTrace, KnowledgeItem, KnowledgeType
-from utils.interact import BaseSummarizer, BaseLLM
+from utils.interact import BaseSummarizer
+from utils.llm import BaseLLM
 from utils.logger import get_logger
-from config import get_system_config
+from config import SystemConfig
 
 from knowledgebase.service import KnowledgeService
 from .knowledge_updater import KnowledgeUpdater
@@ -74,7 +75,8 @@ class SummarizerAgent(BaseSummarizer):
         kb: KnowledgeService,
         llm: BaseLLM = None,
         exploration_constant: float = None,
-        min_score_threshold: float = None
+        min_score_threshold: float = None,
+        config: SystemConfig = None
     ):
         """
         初始化 Summarizer
@@ -84,13 +86,14 @@ class SummarizerAgent(BaseSummarizer):
             llm: LLM 服务
             exploration_constant: MCTS 探索系数
             min_score_threshold: 最小入库分数阈值
+            config: 系统配置（如果为 None 则创建新实例）
         """
-        config = get_system_config()
+        self.config = config or SystemConfig()
         
         self.kb = kb
         self.llm = llm
-        self.exploration_constant = exploration_constant or config.mcts_exploration_constant
-        self.min_score_threshold = min_score_threshold or config.summarizer_min_score_threshold
+        self.exploration_constant = exploration_constant or self.config.mcts_exploration_constant
+        self.min_score_threshold = min_score_threshold or self.config.summarizer_min_score_threshold
         
         # 知识更新器
         self.knowledge_updater = KnowledgeUpdater(
@@ -276,77 +279,5 @@ class SummarizerAgent(BaseSummarizer):
 
 # ============= 测试代码 =============
 if __name__ == "__main__":
-    from utils.const import (
-        EnvironmentState, OptimizationProblem, Solution,
-        Feedback, FeedbackType, VariableDefinition, AugmentationStep
-    )
-    from knowledgebase.Embeddings import MockEmbedding
-    import tempfile
-    import shutil
-    
-    print("测试 SummarizerAgent:")
-    
-    # 创建临时知识库
-    temp_dir = tempfile.mkdtemp()
-    kb = KnowledgeService(
-        embedding_model=MockEmbedding(),
-        storage_path=temp_dir
-    )
-    
-    # 创建 Summarizer
-    summarizer = SummarizerAgent(kb=kb)
-    
-    # 创建多个测试轨迹
-    for i in range(5):
-        trace = ExecutionTrace(
-            trace_id=f"test_{i:03d}",
-            environment=EnvironmentState(
-                user_instruction=f"优化任务 {i}"
-            ),
-            problem=OptimizationProblem(
-                objective_function_latex=r"\min x^2",
-                variables=[VariableDefinition(name="x", lower_bound=0, upper_bound=10)]
-            ),
-            solution=Solution(
-                is_feasible=True,
-                algorithm_used="TestAlgo",
-                decision_variables={"x": i},
-                objective_value=i * i
-            ),
-            feedback=Feedback(
-                feedback_type=FeedbackType.PASSED,
-                score=0.7 + i * 0.05
-            ),
-            tool_chain=[
-                AugmentationStep(
-                    thought="测试",
-                    tool_selected="tool_a" if i % 2 == 0 else "tool_b",
-                    tool_output="ok"
-                ),
-                AugmentationStep(
-                    thought="测试2",
-                    tool_selected="tool_c",
-                    tool_output="ok"
-                )
-            ]
-        )
-        
-        summarizer.summarize(trace)
-    
-    # 查看统计
-    stats = summarizer.get_statistics()
-    print(f"\n统计信息:")
-    print(f"  缓存大小: {stats['buffer_size']}")
-    print(f"  知识数量: {stats['knowledge_count']}")
-    print(f"  MCTS 树深度: {stats['mcts_tree_depth']}")
-    print(f"  最佳工具序列: {stats['best_sequence']}")
-    
-    # 导出 MCTS 树
-    tree = summarizer.export_mcts_tree()
-    print(f"\nMCTS 树结构:")
-    print(f"  根节点访问次数: {tree.get('visits', 0)}")
-    print(f"  子节点数: {len(tree.get('children', []))}")
-    
-    # 清理
-    shutil.rmtree(temp_dir, ignore_errors=True)
-    print("\n测试完成")
+    print("Summarizer 模块测试需要配置 LLM API")
+    print("请运行 python -m test.test_all 进行完整测试")

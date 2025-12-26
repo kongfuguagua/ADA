@@ -1,0 +1,18 @@
+[
+  {
+    "source_trace": "trace_20251226_152709_913883c2",
+    "score": 0.8079999999999999,
+    "timestamp": "2025-12-26T15:27:09.683881",
+    "algorithm": "PSOOptimizer",
+    "objective_value": 0.0,
+    "type": "task_knowledge"
+  },
+  {
+    "source_trace": "trace_20251226_152709_9c675030",
+    "score": 0.8079999999999999,
+    "timestamp": "2025-12-26T15:27:10.276723",
+    "algorithm": "PSOOptimizer",
+    "objective_value": 0.0,
+    "type": "task_knowledge"
+  }
+]

@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-工具注册表
-管理 Planner 可用的所有工具
+Planner 分析工具注册表
+管理为 Planner 决策服务的分析工具
+
+区别于 env/tools（环境交互工具）：
+- 分析工具：统计数据、规则检测、趋势分析、决策建议
+- 环境工具：发送命令、获取原始数据
 """
 
 import sys
@@ -9,7 +13,6 @@ from pathlib import Path
 from typing import Dict, Any, Callable, List, Optional
 from abc import ABC, abstractmethod
 
-# 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from utils.interact import BaseTool
@@ -28,12 +31,7 @@ class ToolRegistry:
         self._tools: Dict[str, BaseTool] = {}
     
     def register(self, tool: BaseTool) -> None:
-        """
-        注册工具
-        
-        Args:
-            tool: 工具实例
-        """
+        """注册工具"""
         self._tools[tool.name] = tool
         logger.info(f"注册工具: {tool.name}")
     
@@ -44,29 +42,12 @@ class ToolRegistry:
         description: str,
         parameters: Dict[str, Any] = None
     ) -> None:
-        """
-        注册函数为工具
-        
-        Args:
-            name: 工具名称
-            func: 可调用函数
-            description: 工具描述
-            parameters: 参数定义
-        """
+        """注册函数为工具"""
         tool = FunctionTool(name, func, description, parameters)
         self.register(tool)
     
     def execute(self, tool_name: str, **kwargs) -> Any:
-        """
-        执行工具
-        
-        Args:
-            tool_name: 工具名称
-            **kwargs: 工具参数
-        
-        Returns:
-            工具执行结果
-        """
+        """执行工具"""
         if tool_name not in self._tools:
             error_msg = f"工具 '{tool_name}' 未注册"
             logger.error(error_msg)
@@ -77,7 +58,7 @@ class ToolRegistry:
         try:
             logger.info(f"执行工具: {tool_name}", params=str(kwargs)[:100])
             result = tool.execute(**kwargs)
-            logger.info(f"工具执行完成: {tool_name}", result=str(result)[:100])
+            logger.info(f"工具执行完成: {tool_name}")
             return result
         except Exception as e:
             error_msg = f"工具执行失败: {str(e)}"
@@ -89,12 +70,7 @@ class ToolRegistry:
         return self._tools.get(name)
     
     def get_tool_descriptions(self) -> str:
-        """
-        生成给 LLM 看的工具列表描述
-        
-        Returns:
-            格式化的工具描述字符串
-        """
+        """生成给 LLM 看的工具列表描述"""
         if not self._tools:
             return "暂无可用工具"
         
@@ -102,7 +78,6 @@ class ToolRegistry:
         for name, tool in self._tools.items():
             lines.append(f"- {name}: {tool.description}")
             
-            # 添加参数说明
             schema = tool.schema
             if schema and "parameters" in schema:
                 props = schema["parameters"].get("properties", {})
@@ -116,12 +91,7 @@ class ToolRegistry:
         return "\n".join(lines)
     
     def get_tools_for_llm(self) -> List[Dict[str, Any]]:
-        """
-        获取 OpenAI 格式的工具定义
-        
-        Returns:
-            工具定义列表
-        """
+        """获取 OpenAI 格式的工具定义"""
         tools = []
         for tool in self._tools.values():
             tools.append({
@@ -133,6 +103,12 @@ class ToolRegistry:
     def list_tools(self) -> List[str]:
         """获取所有工具名称"""
         return list(self._tools.keys())
+    
+    def set_env(self, env) -> None:
+        """为所有支持的工具设置环境"""
+        for tool in self._tools.values():
+            if hasattr(tool, 'set_env'):
+                tool.set_env(env)
     
     def __len__(self) -> int:
         return len(self._tools)
@@ -180,29 +156,21 @@ class FunctionTool(BaseTool):
         }
 
 
-# ============= 预定义工具 =============
+# ============= Planner 分析工具 =============
 
-class WeatherForecastTool(BaseTool):
-    """天气预报工具（模拟）"""
+class FinishTool(BaseTool):
+    """结束状态增广的工具"""
     
     @property
     def name(self) -> str:
-        return "weather_forecast"
+        return "finish"
     
     @property
     def description(self) -> str:
-        return "获取指定位置的天气预报信息，用于预测负载变化"
+        return "当收集到足够信息时调用此工具，结束状态增广阶段"
     
-    def execute(self, location: str = "default", hours: int = 24) -> Dict[str, Any]:
-        """模拟天气预报"""
-        return {
-            "location": location,
-            "forecast": [
-                {"hour": i, "temperature": 20 + (i % 12), "humidity": 60 + (i % 20)}
-                for i in range(hours)
-            ],
-            "summary": f"{location} 未来 {hours} 小时天气预报：晴转多云，气温 18-32°C"
-        }
+    def execute(self, summary: str = "", **kwargs) -> Dict[str, Any]:
+        return {"status": "finished", "summary": summary}
     
     @property
     def schema(self) -> Dict[str, Any]:
@@ -212,13 +180,9 @@ class WeatherForecastTool(BaseTool):
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "location": {
+                    "summary": {
                         "type": "string",
-                        "description": "位置名称"
-                    },
-                    "hours": {
-                        "type": "integer",
-                        "description": "预报小时数"
+                        "description": "状态增广的总结"
                     }
                 },
                 "required": []
@@ -226,33 +190,84 @@ class WeatherForecastTool(BaseTool):
         }
 
 
-class PowerFlowTool(BaseTool):
-    """潮流计算工具（模拟）"""
+class GridStatusAnalysisTool(BaseTool):
+    """电网状态分析工具（为 Planner 提供分析结论）"""
+    
+    def __init__(self, env=None):
+        self._env = env
+    
+    def set_env(self, env):
+        self._env = env
     
     @property
     def name(self) -> str:
-        return "power_flow"
+        return "grid_status_analysis"
     
     @property
     def description(self) -> str:
-        return "计算电力系统潮流，返回各节点电压和线路功率"
+        return "分析当前电网状态，提供安全评估和风险识别结论"
     
-    def execute(self, load_data: Dict[str, float] = None) -> Dict[str, Any]:
-        """模拟潮流计算"""
-        load_data = load_data or {"bus_1": 100.0, "bus_2": 80.0}
+    def execute(self, **kwargs) -> Dict[str, Any]:
+        """分析电网状态"""
+        if self._env is None or not hasattr(self._env, 'current_obs') or self._env.current_obs is None:
+            return self._default_analysis()
+        
+        obs = self._env.current_obs
+        
+        # 统计分析
+        max_rho = float(obs.rho.max())
+        avg_rho = float(obs.rho.mean())
+        overflow_count = int((obs.rho > 1.0).sum())
+        near_overflow = int((obs.rho > 0.9).sum())
+        
+        # 风险评估
+        if overflow_count > 0:
+            risk_level = "危险"
+            risk_score = 1.0
+        elif near_overflow > 0:
+            risk_level = "警告"
+            risk_score = 0.7
+        elif max_rho > 0.7:
+            risk_level = "注意"
+            risk_score = 0.4
+        else:
+            risk_level = "安全"
+            risk_score = 0.1
+        
+        # 生成建议
+        recommendations = []
+        if overflow_count > 0:
+            recommendations.append("立即采取再调度或拓扑调整措施")
+        if near_overflow > 0:
+            recommendations.append("关注高负载线路，准备应急方案")
+        if max_rho > 0.7:
+            recommendations.append("监控负载变化趋势")
         
         return {
-            "converged": True,
-            "iterations": 5,
-            "bus_voltages": {
-                bus: 1.0 + (load % 10) / 100 
-                for bus, load in load_data.items()
+            "summary": f"电网状态: {risk_level}",
+            "risk_level": risk_level,
+            "risk_score": risk_score,
+            "statistics": {
+                "max_rho": max_rho,
+                "avg_rho": avg_rho,
+                "overflow_count": overflow_count,
+                "near_overflow_count": near_overflow,
             },
-            "line_flows": {
-                "line_1_2": sum(load_data.values()) * 0.6,
-                "line_2_3": sum(load_data.values()) * 0.4
+            "recommendations": recommendations,
+        }
+    
+    def _default_analysis(self) -> Dict[str, Any]:
+        return {
+            "summary": "电网状态: 正常（模拟数据）",
+            "risk_level": "安全",
+            "risk_score": 0.2,
+            "statistics": {
+                "max_rho": 0.75,
+                "avg_rho": 0.45,
+                "overflow_count": 0,
+                "near_overflow_count": 2,
             },
-            "total_loss": sum(load_data.values()) * 0.02
+            "recommendations": ["监控负载变化趋势"],
         }
     
     @property
@@ -260,51 +275,91 @@ class PowerFlowTool(BaseTool):
         return {
             "name": self.name,
             "description": self.description,
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "load_data": {
-                        "type": "object",
-                        "description": "各节点负载数据 {节点名: 负载值}"
-                    }
-                },
-                "required": []
-            }
+            "parameters": {"type": "object", "properties": {}, "required": []}
         }
 
 
-class LoadForecastTool(BaseTool):
-    """负载预测工具（模拟）"""
+class OverflowRiskAnalysisTool(BaseTool):
+    """过载风险分析工具"""
+    
+    def __init__(self, env=None):
+        self._env = env
+    
+    def set_env(self, env):
+        self._env = env
     
     @property
     def name(self) -> str:
-        return "load_forecast"
+        return "overflow_risk_analysis"
     
     @property
     def description(self) -> str:
-        return "预测未来时段的电力负载"
+        return "分析线路过载风险，识别高风险线路并提供处理建议"
     
-    def execute(self, base_load: float = 100.0, hours: int = 24) -> Dict[str, Any]:
-        """模拟负载预测"""
-        import math
+    def execute(self, threshold: float = 0.9, **kwargs) -> Dict[str, Any]:
+        """分析过载风险"""
+        if self._env is None or not hasattr(self._env, 'current_obs') or self._env.current_obs is None:
+            return self._default_analysis(threshold)
         
-        forecast = []
-        for h in range(hours):
-            # 模拟日负载曲线
-            factor = 0.8 + 0.4 * math.sin((h - 6) * math.pi / 12)
-            forecast.append({
-                "hour": h,
-                "load": base_load * factor,
-                "confidence": 0.95 - h * 0.01
+        obs = self._env.current_obs
+        env = self._env.env
+        
+        # 识别高风险线路
+        high_risk_lines = []
+        for i, rho in enumerate(obs.rho):
+            if rho > threshold:
+                line_name = env.name_line[i] if hasattr(env, 'name_line') else f"line_{i}"
+                high_risk_lines.append({
+                    "line_id": i,
+                    "line_name": str(line_name),
+                    "rho": float(rho),
+                    "is_overflow": bool(rho > 1.0),
+                    "risk_category": "过载" if rho > 1.0 else "高负载",
+                })
+        
+        # 按风险排序
+        high_risk_lines.sort(key=lambda x: x["rho"], reverse=True)
+        
+        # 生成处理建议
+        suggestions = []
+        overflow_lines = [l for l in high_risk_lines if l["is_overflow"]]
+        if overflow_lines:
+            suggestions.append({
+                "priority": "紧急",
+                "action": "再调度",
+                "target": [l["line_name"] for l in overflow_lines[:3]],
+                "reason": "线路过载，需立即降低负载"
+            })
+        
+        near_overflow = [l for l in high_risk_lines if not l["is_overflow"]]
+        if near_overflow:
+            suggestions.append({
+                "priority": "预防",
+                "action": "拓扑调整",
+                "target": [l["line_name"] for l in near_overflow[:3]],
+                "reason": "线路接近过载，建议预防性调整"
             })
         
         return {
-            "base_load": base_load,
-            "forecast": forecast,
-            "peak_hour": 14,
-            "peak_load": base_load * 1.2,
-            "valley_hour": 4,
-            "valley_load": base_load * 0.6
+            "threshold": threshold,
+            "total_high_risk": len(high_risk_lines),
+            "overflow_count": len(overflow_lines),
+            "high_risk_lines": high_risk_lines[:10],  # 限制返回数量
+            "suggestions": suggestions,
+        }
+    
+    def _default_analysis(self, threshold: float) -> Dict[str, Any]:
+        return {
+            "threshold": threshold,
+            "total_high_risk": 2,
+            "overflow_count": 0,
+            "high_risk_lines": [
+                {"line_id": 5, "line_name": "line_5", "rho": 0.95, "is_overflow": False, "risk_category": "高负载"},
+                {"line_id": 12, "line_name": "line_12", "rho": 0.92, "is_overflow": False, "risk_category": "高负载"},
+            ],
+            "suggestions": [
+                {"priority": "预防", "action": "拓扑调整", "target": ["line_5", "line_12"], "reason": "线路接近过载"}
+            ],
         }
     
     @property
@@ -315,13 +370,9 @@ class LoadForecastTool(BaseTool):
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "base_load": {
+                    "threshold": {
                         "type": "number",
-                        "description": "基础负载值 (MW)"
-                    },
-                    "hours": {
-                        "type": "integer",
-                        "description": "预测小时数"
+                        "description": "风险阈值 (0-1)，默认 0.9"
                     }
                 },
                 "required": []
@@ -329,42 +380,205 @@ class LoadForecastTool(BaseTool):
         }
 
 
-def create_default_registry() -> ToolRegistry:
-    """创建包含默认工具的注册表"""
+class GeneratorCapacityAnalysisTool(BaseTool):
+    """发电机容量分析工具"""
+    
+    def __init__(self, env=None):
+        self._env = env
+    
+    def set_env(self, env):
+        self._env = env
+    
+    @property
+    def name(self) -> str:
+        return "generator_capacity_analysis"
+    
+    @property
+    def description(self) -> str:
+        return "分析发电机出力和可调容量，评估调度灵活性"
+    
+    def execute(self, **kwargs) -> Dict[str, Any]:
+        """分析发电机容量"""
+        if self._env is None or not hasattr(self._env, 'current_obs') or self._env.current_obs is None:
+            return self._default_analysis()
+        
+        obs = self._env.current_obs
+        env = self._env.env
+        
+        total_gen = float(obs.gen_p.sum())
+        total_load = float(obs.load_p.sum())
+        
+        # 分析可调度发电机
+        redispatchable_analysis = []
+        total_upward = 0.0
+        total_downward = 0.0
+        
+        if hasattr(env, 'gen_redispatchable'):
+            for i in range(env.n_gen):
+                if env.gen_redispatchable[i]:
+                    p_max = float(obs.gen_pmax[i]) if hasattr(obs, 'gen_pmax') else 100.0
+                    p_min = float(obs.gen_pmin[i]) if hasattr(obs, 'gen_pmin') else 0.0
+                    current_p = float(obs.gen_p[i])
+                    
+                    upward = p_max - current_p
+                    downward = current_p - p_min
+                    
+                    total_upward += upward
+                    total_downward += downward
+                    
+                    redispatchable_analysis.append({
+                        "gen_id": i,
+                        "gen_name": str(env.name_gen[i]) if hasattr(env, 'name_gen') else f"gen_{i}",
+                        "current_p": current_p,
+                        "upward_margin": upward,
+                        "downward_margin": downward,
+                    })
+        
+        # 评估灵活性
+        flexibility_score = min(1.0, (total_upward + total_downward) / (total_gen + 1e-6))
+        
+        return {
+            "summary": f"发电总量: {total_gen:.1f}MW, 负荷: {total_load:.1f}MW",
+            "total_generation_mw": total_gen,
+            "total_load_mw": total_load,
+            "power_balance": total_gen - total_load,
+            "flexibility": {
+                "total_upward_margin_mw": total_upward,
+                "total_downward_margin_mw": total_downward,
+                "flexibility_score": flexibility_score,
+            },
+            "redispatchable_generators": redispatchable_analysis[:5],  # 限制返回数量
+        }
+    
+    def _default_analysis(self) -> Dict[str, Any]:
+        return {
+            "summary": "发电总量: 105.0MW, 负荷: 100.0MW",
+            "total_generation_mw": 105.0,
+            "total_load_mw": 100.0,
+            "power_balance": 5.0,
+            "flexibility": {
+                "total_upward_margin_mw": 50.0,
+                "total_downward_margin_mw": 30.0,
+                "flexibility_score": 0.76,
+            },
+            "redispatchable_generators": [
+                {"gen_id": 0, "gen_name": "gen_0", "current_p": 40.0, "upward_margin": 20.0, "downward_margin": 15.0},
+            ],
+        }
+    
+    @property
+    def schema(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": {"type": "object", "properties": {}, "required": []}
+        }
+
+
+class LoadTrendAnalysisTool(BaseTool):
+    """负荷趋势分析工具"""
+    
+    def __init__(self, env=None):
+        self._env = env
+    
+    def set_env(self, env):
+        self._env = env
+    
+    @property
+    def name(self) -> str:
+        return "load_trend_analysis"
+    
+    @property
+    def description(self) -> str:
+        return "分析负荷变化趋势，预测峰谷时段"
+    
+    def execute(self, forecast_hours: int = 24, **kwargs) -> Dict[str, Any]:
+        """分析负荷趋势"""
+        import math
+        
+        if self._env is None or not hasattr(self._env, 'current_obs') or self._env.current_obs is None:
+            current_load = 100.0
+            current_hour = 12
+        else:
+            obs = self._env.current_obs
+            current_load = float(obs.load_p.sum())
+            current_hour = obs.hour_of_day if hasattr(obs, 'hour_of_day') else 12
+        
+        # 生成日负荷曲线预测
+        forecast = []
+        for h in range(forecast_hours):
+            hour = (current_hour + h) % 24
+            # 典型日负荷曲线
+            factor = 0.8 + 0.4 * math.sin((hour - 6) * math.pi / 12)
+            predicted_load = current_load * factor
+            forecast.append({
+                "hour": hour,
+                "predicted_load_mw": predicted_load,
+            })
+        
+        # 识别峰谷
+        peak = max(forecast, key=lambda x: x["predicted_load_mw"])
+        valley = min(forecast, key=lambda x: x["predicted_load_mw"])
+        
+        # 趋势判断
+        next_3h = forecast[:3]
+        trend = "上升" if next_3h[-1]["predicted_load_mw"] > next_3h[0]["predicted_load_mw"] else "下降"
+        
+        return {
+            "current_load_mw": current_load,
+            "current_hour": current_hour,
+            "trend": trend,
+            "peak": {
+                "hour": peak["hour"],
+                "load_mw": peak["predicted_load_mw"],
+                "hours_until": (peak["hour"] - current_hour) % 24,
+            },
+            "valley": {
+                "hour": valley["hour"],
+                "load_mw": valley["predicted_load_mw"],
+                "hours_until": (valley["hour"] - current_hour) % 24,
+            },
+            "forecast_summary": forecast[:6],  # 只返回前6小时
+            "planning_advice": f"负荷{trend}趋势，预计{(peak['hour'] - current_hour) % 24}小时后达到峰值",
+        }
+    
+    @property
+    def schema(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "forecast_hours": {
+                        "type": "integer",
+                        "description": "预测小时数，默认 24"
+                    }
+                },
+                "required": []
+            }
+        }
+
+
+def create_default_registry(env=None) -> ToolRegistry:
+    """
+    创建包含默认工具的注册表
+    
+    Args:
+        env: Grid2Op 环境实例（可选）
+    
+    Returns:
+        配置好的工具注册表
+    """
     registry = ToolRegistry()
-    registry.register(WeatherForecastTool())
-    registry.register(PowerFlowTool())
-    registry.register(LoadForecastTool())
+    
+    # 注册结束工具
+    registry.register(FinishTool())
+    
+    # 注册分析工具
+    registry.register(GridStatusAnalysisTool(env))
+    registry.register(OverflowRiskAnalysisTool(env))
+    registry.register(GeneratorCapacityAnalysisTool(env))
+    registry.register(LoadTrendAnalysisTool(env))
+    
     return registry
-
-
-# ============= 测试代码 =============
-if __name__ == "__main__":
-    print("测试 ToolRegistry:")
-    
-    # 创建注册表
-    registry = create_default_registry()
-    
-    print(f"已注册工具数量: {len(registry)}")
-    print(f"工具列表: {registry.list_tools()}")
-    
-    print("\n工具描述:")
-    print(registry.get_tool_descriptions())
-    
-    print("\n测试工具执行:")
-    
-    # 天气预报
-    result = registry.execute("weather_forecast", location="北京", hours=6)
-    print(f"天气预报: {result['summary']}")
-    
-    # 潮流计算
-    result = registry.execute("power_flow", load_data={"bus_1": 100, "bus_2": 80})
-    print(f"潮流计算: 收敛={result['converged']}, 损耗={result['total_loss']:.2f}MW")
-    
-    # 负载预测
-    result = registry.execute("load_forecast", base_load=100, hours=24)
-    print(f"负载预测: 峰值={result['peak_load']:.1f}MW@{result['peak_hour']}时")
-    
-    # 测试不存在的工具
-    result = registry.execute("unknown_tool")
-    print(f"未知工具: {result}")

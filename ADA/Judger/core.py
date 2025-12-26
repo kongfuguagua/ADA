@@ -12,9 +12,10 @@ from typing import Dict, Any, Optional
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.const import OptimizationProblem, Solution, Feedback, FeedbackType
-from utils.interact import BaseJudger, BaseLLM, BaseSimulator
+from utils.interact import BaseJudger, BaseSimulator
+from utils.llm import BaseLLM
 from utils.logger import get_logger
-from config import get_system_config
+from config import SystemConfig
 
 from .Reward.phy_reward import PhysicalReward
 from .Reward.llm_reward import LLMReward
@@ -39,7 +40,8 @@ class JudgerAgent(BaseJudger):
         simulator: BaseSimulator = None,
         llm: BaseLLM = None,
         alpha: float = None,
-        pass_threshold: float = None
+        pass_threshold: float = None,
+        config: SystemConfig = None
     ):
         """
         初始化 Judger
@@ -49,11 +51,12 @@ class JudgerAgent(BaseJudger):
             llm: LLM 服务
             alpha: 物理评分权重
             pass_threshold: 通过阈值
+            config: 系统配置（如果为 None 则创建新实例）
         """
-        config = get_system_config()
+        self.config = config or SystemConfig()
         
-        self.alpha = alpha if alpha is not None else config.judger_alpha
-        self.pass_threshold = pass_threshold if pass_threshold is not None else config.judger_pass_threshold
+        self.alpha = alpha if alpha is not None else self.config.judger_alpha
+        self.pass_threshold = pass_threshold if pass_threshold is not None else self.config.judger_pass_threshold
         
         # 初始化评分器
         self.phy_reward = PhysicalReward(simulator=simulator)

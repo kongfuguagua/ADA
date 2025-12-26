@@ -16,7 +16,7 @@ from functools import wraps
 # 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config import get_system_config
+from config import SystemConfig
 
 
 class ADAFormatter(logging.Formatter):
@@ -87,7 +87,7 @@ class ADALogger:
             
             # 文件输出
             if log_to_file:
-                config = get_system_config()
+                config = SystemConfig()
                 log_path = config.get_log_path()
                 log_file = log_path / f"{name}_{datetime.now().strftime('%Y%m%d')}.log"
                 

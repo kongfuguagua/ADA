@@ -1,11 +1,25 @@
-grid2op
-numpy
-lightsim2grid
-openai
-langchain-openai
-langchain-core
-markdown
-tqdm
-python-dotenv
-gurobipy
-dash<3.0.0
+# ADA 系统依赖
+
+# 核心依赖
+numpy>=1.21.0
+scipy>=1.7.0
+pydantic>=2.0.0
+python-dotenv>=0.19.0
+tqdm>=4.62.0
+
+# LLM 和 Embedding
+openai>=1.0.0
+
+# 向量数据库
+# langchain-openai  # 可选
+
+# Grid2Op 环境 (可选)
+grid2op>=1.9.0
+lightsim2grid>=0.7.0
+
+# 优化求解器 (可选)
+# gurobipy  # 需要商业许可
+
+# 可视化 (可选)
+# dash<3.0.0
+# markdown

@@ -5,18 +5,12 @@
 """
 
 import os
-import sys
 import json
 import uuid
-from pathlib import Path
-from typing import List, Dict, Any, Optional
-import numpy as np
+from typing import List, Dict, Any
 from tqdm import tqdm
 
-# 添加项目根目录到路径
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from .Embeddings import BaseEmbeddings, OpenAIEmbedding
+from utils.embeddings import BaseEmbeddings
 
 
 class VectorStore:
@@ -25,14 +19,9 @@ class VectorStore:
     支持文档存储、向量检索、持久化
     """
     
-    def __init__(self, documents: List[str] = None) -> None:
-        """
-        初始化向量存储
-        
-        Args:
-            documents: 初始文档列表
-        """
-        self.documents: List[str] = documents or []
+    def __init__(self) -> None:
+        """初始化向量存储"""
+        self.documents: List[str] = []
         self.vectors: List[List[float]] = []
         self.metadata: List[Dict[str, Any]] = []
         self.ids: List[str] = []
@@ -72,31 +61,6 @@ class VectorStore:
             new_ids.append(doc_id)
         
         return new_ids
-    
-    def get_vector(self, embedding_model: BaseEmbeddings, show_progress: bool = True) -> List[List[float]]:
-        """
-        为所有文档计算向量（兼容旧接口）
-        
-        Args:
-            embedding_model: Embedding 模型
-            show_progress: 是否显示进度条
-        
-        Returns:
-            向量列表
-        """
-        self.vectors = []
-        self.ids = []
-        self.metadata = []
-        
-        iterator = tqdm(self.documents, desc="计算嵌入向量") if show_progress else self.documents
-        
-        for doc in iterator:
-            vector = embedding_model.get_embedding(doc)
-            self.vectors.append(vector)
-            self.ids.append(str(uuid.uuid4()))
-            self.metadata.append({})
-        
-        return self.vectors
     
     def query(
         self, 
@@ -189,7 +153,7 @@ class VectorStore:
         
         return True
     
-    def persist(self, path: str = 'storage') -> None:
+    def persist(self, path: str) -> None:
         """
         持久化到磁盘
         
@@ -215,7 +179,7 @@ class VectorStore:
         with open(f"{path}/ids.json", 'w', encoding='utf-8') as f:
             json.dump(self.ids, f)
     
-    def load(self, path: str = 'storage') -> bool:
+    def load(self, path: str) -> bool:
         """
         从磁盘加载
         
@@ -257,59 +221,8 @@ class VectorStore:
             print(f"加载向量库失败: {e}")
             return False
     
-    def load_vector(self, path: str = 'storage') -> None:
-        """兼容旧接口"""
-        self.load(path)
-    
-    def get_similarity(self, vector1: List[float], vector2: List[float]) -> float:
-        """计算相似度（兼容旧接口）"""
-        return BaseEmbeddings.cosine_similarity(vector1, vector2)
-    
     def __len__(self) -> int:
         return len(self.documents)
     
     def __repr__(self) -> str:
         return f"VectorStore(documents={len(self.documents)}, has_vectors={bool(self.vectors)})"
-
-
-# ============= 测试代码 =============
-if __name__ == "__main__":
-    from Embeddings import MockEmbedding
-    
-    print("测试 VectorStore:")
-    
-    # 创建测试文档
-    docs = [
-        "电网调度是指电力系统中对发电和输电的统一调配",
-        "潮流计算是电力系统分析的基础",
-        "优化调度可以降低发电成本",
-        "机器学习在电力系统中有广泛应用",
-    ]
-    
-    # 创建向量存储
-    store = VectorStore(docs)
-    embedding = MockEmbedding(dimension=64)
-    
-    # 计算向量
-    store.get_vector(embedding, show_progress=False)
-    print(f"存储状态: {store}")
-    
-    # 测试检索
-    results = store.query("电力系统调度优化", embedding, k=2)
-    print("\n检索结果:")
-    for r in results:
-        print(f"  [{r['score']:.4f}] {r['content'][:30]}...")
-    
-    # 测试持久化
-    store.persist("test_storage")
-    print("\n持久化完成")
-    
-    # 测试加载
-    new_store = VectorStore()
-    new_store.load("test_storage")
-    print(f"加载后状态: {new_store}")
-    
-    # 清理测试文件
-    import shutil
-    shutil.rmtree("test_storage", ignore_errors=True)
-    print("测试完成，已清理临时文件")

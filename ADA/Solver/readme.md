@@ -2,41 +2,55 @@
 
 ## 1. 核心职责
 
-Solver 是系统的**计算引擎**。它接收 Planner 定义的数学问题，通过特征分析自动匹配最适合的优化算法进行求解。
+Solver 是系统的**计算引擎**，负责解决**调度目标优先级与求解算法的场景适应性**问题（论文 2.2 节）。它接收 Planner 定义的数学问题，通过特征分析自动匹配最适合的优化算法进行求解。
 
-## 2. 核心逻辑：问题-算法对齐 (Problem-Algorithm Alignment)
+## 2. 论文需求响应表
 
-### 2.1 特征提取 (Feature Extraction)
+| 论文需求 | 实现状态 | 实现位置 |
+|---------|---------|---------|
+| 问题-算法对齐 (Problem-Algorithm Alignment) | ✅ 已实现 | `matcher.py: AlgorithmMatcher` |
+| 特征向量提取 φ | ✅ 已实现 | `feature.py: ProblemFeatureExtractor` |
+| 算法能力向量 ψ(A) | ✅ 已实现 | `Template/base.py: get_capability_vector()` |
+| BM25 风格对齐评分 G(A,φ) | ✅ 已实现 | `matcher.py: _alignment_score()` |
+| IDF 风格特征权重 w(fᵢ) | ✅ 已实现 | `matcher.py: _get_feature_weights()` |
+| 多算法策略模式 | ✅ 已实现 | `Template/*.py` |
+| 收敛轨迹记录 | ✅ 已实现 | `Solution.convergence_curve` |
 
-将输入的优化元组 $\langle \mathcal{J}, \Theta \rangle$ 映射为特征向量 $\phi$：
+## 3. 核心逻辑：问题-算法对齐
 
-$$\phi(\langle \mathcal{J}, \Theta \rangle) = [f_1, \dots, f_n]^\top$$
+### 3.1 特征提取
 
-其中 $f_i \in [0, 1]$ 量化了优化问题的各项特征：
+将输入的优化元组 $\langle \mathcal{J}, \Theta \rangle$ 映射为 **5 维特征向量** $\phi \in [0,1]^5$：
 
-| 特征维度 | 含义 | 计算方式 |
-|---------|------|---------|
-| $f_1$ | 非凸性 (Non-convexity) | 基于表达式模式分析 |
-| $f_2$ | 非线性程度 (Non-linearity) | 非线性项占比 |
-| $f_3$ | 约束紧迫度 (Constraint Stiffness) | 约束密度 + 边界紧度 |
-| $f_4$ | 离散性 (Discreteness) | 整数/二元变量占比 |
-| $f_5$ | 规模复杂度 (Scale) | 变量数归一化 |
+| 维度 | 特征 | 含义 | 计算方式 |
+|-----|------|------|---------|
+| $f_1$ | non_convexity_score | 非凸性程度 | 表达式模式分析 |
+| $f_2$ | non_linearity_score | 非线性程度 | 非线性项占比 |
+| $f_3$ | constraint_stiffness | 约束紧迫度 | 约束密度 + 边界紧度 |
+| $f_4$ | discreteness_score | 离散性程度 | 整数/二元变量占比 |
+| $f_5$ | scale_score | 规模复杂度 | 变量数归一化 |
 
-### 2.2 算法匹配 (Algorithm Matching)
+### 3.2 算法匹配
 
-每个算法 $A \in \mathcal{A}$ 维护能力向量 $\psi(A)$ 表征其归纳偏置。对齐评分函数：
+每个算法 $A$ 维护 **5 维能力向量** $\psi(A) \in [0,1]^5$：
 
-$$G(A, \phi) = \sum_{f_i \in \phi} w(f_i) \cdot \frac{\psi_i(A) \cdot (k_1 + 1)}{\psi_i(A) + K(A)}$$
+| 维度 | 能力 | 说明 |
+|-----|------|------|
+| $\psi_0$ | convex_handling | 凸问题处理能力 |
+| $\psi_1$ | non_convex_handling | 非凸问题处理能力 |
+| $\psi_2$ | constraint_handling | 约束处理能力 |
+| $\psi_3$ | speed | 求解速度 |
+| $\psi_4$ | global_optimality | 全局最优性保证 |
 
-其中特征权重采用 IDF 风格计算：
+对齐评分函数（BM25 风格）：
 
-$$w(f_i) = \ln \left( 1 + \frac{\sum_{A' \in \mathcal{A}} \sum_{j=1}^n \psi_j(A')}{\sum_{A \in \mathcal{A}} \psi_i(A) + \epsilon} \right)$$
+$$G(A, \phi) = \sum_{i} w(f_i) \cdot \frac{\psi_j(A) \cdot (k_1 + 1)}{\psi_j(A) + k_1 \cdot (1 - b + b \cdot f_i)}$$
 
-### 2.3 执行求解 (Execution)
+特征权重（IDF 风格）：
 
-实例化选定算法，运行求解过程，记录收敛轨迹。
+$$w(f_i) = \ln \left( 1 + \frac{\sum_{A'} \sum_j \psi_j(A')}{\sum_A \psi_i(A) + \epsilon} \right)$$
 
-## 3. 模块架构
+## 4. 模块架构
 
 ```
 Solver/
@@ -59,56 +73,44 @@ Solver/
     └── gradient.py      # 梯度下降
 ```
 
-## 4. 接口数据定义
+## 5. 接口定义
 
-### 4.1 输入: OptimizationProblem
+### 输入: OptimizationProblem
 
 ```python
 class OptimizationProblem(BaseModel):
-    objective_function_latex: str   # 目标函数 LaTeX
-    objective_function_code: str    # 目标函数 Python 代码
-    constraints_latex: List[str]    # 约束条件 LaTeX
-    constraints_code: List[str]     # 约束条件代码
-    variables: List[VariableDefinition]  # 变量定义
-    parameters: Dict[str, float]    # 常数参数
-    is_minimization: bool = True    # 是否最小化
+    objective_function_latex: str
+    objective_function_code: str
+    constraints_latex: List[str]
+    constraints_code: List[str]
+    variables: List[VariableDefinition]
+    parameters: Dict[str, float]
+    is_minimization: bool = True
 ```
 
-### 4.2 输出: Solution
+### 输出: Solution
 
 ```python
 class Solution(BaseModel):
-    is_feasible: bool               # 是否可行
-    algorithm_used: str             # 使用的算法
-    decision_variables: Dict[str, float]  # 最优解
-    objective_value: float          # 目标值
-    solving_time: float             # 求解时间
-    convergence_curve: List[float]  # 收敛曲线
-    solver_message: str             # 求解器消息
+    is_feasible: bool
+    algorithm_used: str
+    decision_variables: Dict[str, float]
+    objective_value: float
+    solving_time: float
+    convergence_curve: List[float]
+    solver_message: str
 ```
-
-## 5. 算法能力向量定义
-
-每个算法需定义 5 维能力向量 $\psi(A) \in [0,1]^5$：
-
-| 维度 | 能力 | 说明 |
-|-----|------|------|
-| $\psi_0$ | convex_handling | 凸问题处理能力 |
-| $\psi_1$ | non_convex_handling | 非凸问题处理能力 |
-| $\psi_2$ | constraint_handling | 约束处理能力 |
-| $\psi_3$ | speed | 求解速度 |
-| $\psi_4$ | global_optimality | 全局最优性保证 |
 
 ## 6. 算法库概览
 
-| 算法 | 适用场景 | 依赖 |
-|-----|---------|------|
-| ConvexOptimizer | 凸优化、光滑问题 | scipy |
-| GurobiOptimizer | 线性规划、混合整数规划 | gurobipy |
-| PSOOptimizer | 非凸连续优化 | 无 |
-| BayesianOptimizer | 黑盒优化、昂贵函数 | scikit-optimize |
-| GeneticOptimizer | 组合优化、离散问题 | 无 |
-| GradientOptimizer | 可微分问题 | scipy |
+| 算法 | 适用场景 | 能力向量 | 依赖 |
+|-----|---------|---------|------|
+| ConvexOptimizer | 凸优化、光滑问题 | [0.9, 0.2, 0.7, 0.8, 0.9] | scipy |
+| GurobiOptimizer | LP、MILP、QP | [0.9, 0.5, 0.9, 0.7, 0.95] | gurobipy |
+| PSOOptimizer | 非凸连续优化 | [0.3, 0.8, 0.5, 0.5, 0.6] | 无 |
+| BayesianOptimizer | 黑盒优化 | [0.4, 0.7, 0.4, 0.3, 0.5] | scikit-optimize |
+| GeneticOptimizer | 组合优化、离散问题 | [0.2, 0.7, 0.6, 0.4, 0.7] | 无 |
+| GradientOptimizer | 可微分问题 | [0.7, 0.3, 0.4, 0.9, 0.4] | scipy |
 
 ## 7. 使用示例
 

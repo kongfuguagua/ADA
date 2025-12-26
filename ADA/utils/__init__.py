@@ -1,33 +1,41 @@
 # -*- coding: utf-8 -*-
 """
-ADA 通用工具模块
-包含数据契约、接口定义、日志工具等
+ADA 工具模块
+
+包含：
+- const: 数据契约定义
+- interact: Agent 接口定义
+- logger: 日志系统
+- llm: LLM 服务
+- embeddings: Embedding 服务
 """
 
 from .const import (
     # 枚举类型
-    AgentRole,
+    VariableType,
     KnowledgeType,
     FeedbackType,
-    # 数据契约
-    EnvironmentState,
-    KnowledgeItem,
+    
+    # 数据结构
     VariableDefinition,
-    OptimizationProblem,
     SolverAlgorithmMeta,
-    Solution,
     PhysicalMetrics,
+    KnowledgeItem,
+    EnvironmentState,
+    OptimizationProblem,
+    Solution,
     Feedback,
-    ExecutionTrace,
-    ToolAction,
     AugmentationStep,
+    ToolAction,
+    ExecutionTrace,
 )
 
 from .interact import (
-    # 基础接口
-    BaseLLM,
-    BaseVectorStore,
+    # 基础服务接口
     BaseTool,
+    BaseSimulator,
+    BaseVectorStore,
+    
     # Agent 接口
     BasePlanner,
     BaseSolverStrategy,
@@ -36,40 +44,46 @@ from .interact import (
     BaseSummarizer,
 )
 
-from .logger import (
-    get_logger,
-    ADALogger,
-)
+from .logger import get_logger
+
+from .llm import BaseLLM, OpenAIChat
+from .embeddings import BaseEmbeddings, OpenAIEmbedding
 
 __all__ = [
     # 枚举
-    'AgentRole',
-    'KnowledgeType', 
+    'VariableType',
+    'KnowledgeType',
     'FeedbackType',
-    # 数据契约
-    'EnvironmentState',
-    'KnowledgeItem',
+    
+    # 数据结构
     'VariableDefinition',
-    'OptimizationProblem',
     'SolverAlgorithmMeta',
-    'Solution',
     'PhysicalMetrics',
+    'KnowledgeItem',
+    'EnvironmentState',
+    'OptimizationProblem',
+    'Solution',
     'Feedback',
-    'ExecutionTrace',
-    'ToolAction',
     'AugmentationStep',
-    # 基础接口
+    'ToolAction',
+    'ExecutionTrace',
+    
+    # 接口
     'BaseLLM',
-    'BaseVectorStore',
+    'BaseEmbeddings',
     'BaseTool',
-    # Agent 接口
+    'BaseSimulator',
+    'BaseVectorStore',
     'BasePlanner',
     'BaseSolverStrategy',
     'BaseSolver',
     'BaseJudger',
     'BaseSummarizer',
-    # 日志
+    
+    # 实现
+    'OpenAIChat',
+    'OpenAIEmbedding',
+    
+    # 工具函数
     'get_logger',
-    'ADALogger',
 ]
-

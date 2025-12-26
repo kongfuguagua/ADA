@@ -311,6 +311,8 @@ class ProblemFeatureExtractor:
         Returns:
             问题特征
         """
+        from .prompt import SolverPrompts
+        
         # 先用规则提取基础特征
         features = self.extract(problem)
         
@@ -318,20 +320,11 @@ class ProblemFeatureExtractor:
             return features
         
         # 用 LLM 验证和补充
-        prompt = f"""分析以下优化问题的数学特征：
-
-目标函数: {problem.objective_function_latex}
-约束条件: {problem.constraints_latex}
-变量: {[v.name for v in problem.variables]}
-
-请判断以下特征（每个特征用 0-1 的分数表示）：
-1. 非凸性程度 (0=凸, 1=高度非凸)
-2. 非线性程度 (0=线性, 1=高度非线性)
-3. 约束紧迫度 (0=宽松, 1=非常紧)
-
-请用 JSON 格式回答：
-{{"non_convexity_score": 0.0-1.0, "non_linearity_score": 0.0-1.0, "constraint_stiffness": 0.0-1.0, "analysis": "分析理由"}}
-"""
+        prompt = SolverPrompts.build_feature_analysis_prompt(
+            objective_function=problem.objective_function_latex,
+            constraints=str(problem.constraints_latex),
+            variables=str([v.name for v in problem.variables])
+        )
         
         try:
             response = self.llm.chat(prompt)

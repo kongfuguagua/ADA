@@ -9,7 +9,7 @@ from typing import List, Optional
 from utils.const import OptimizationProblem, Solution
 from utils.interact import BaseSolver, BaseSolverStrategy
 from utils.logger import get_logger
-from config import get_system_config
+from config import SystemConfig
 
 from .feature import ProblemFeatureExtractor
 from .matcher import AlgorithmMatcher
@@ -54,7 +54,8 @@ class SolverAgent(BaseSolver):
         algorithms: List[BaseSolverStrategy] = None,
         llm=None,
         timeout: float = None,
-        use_llm_features: bool = False
+        use_llm_features: bool = False,
+        config: SystemConfig = None
     ):
         """
         初始化 Solver
@@ -64,9 +65,10 @@ class SolverAgent(BaseSolver):
             llm: LLM 服务（用于辅助特征分析）
             timeout: 求解超时时间
             use_llm_features: 是否使用 LLM 辅助特征提取
+            config: 系统配置（如果为 None 则创建新实例）
         """
-        config = get_system_config()
-        self.timeout = timeout or config.solver_timeout
+        self.config = config or SystemConfig()
+        self.timeout = timeout or self.config.solver_timeout
         self.use_llm_features = use_llm_features
         
         # 初始化组件

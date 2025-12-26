@@ -2,11 +2,15 @@
 """
 系统全局配置
 定义 Judger 权重、MCTS 参数、重试次数等全局参数
+
+使用方式:
+    from config import SystemConfig
+    config = SystemConfig()  # 每次创建新实例
 """
 
 import os
-from dataclasses import dataclass, field
-from typing import Dict, Any, Optional
+from dataclasses import dataclass
+from typing import Dict, Any
 from pathlib import Path
 
 
@@ -15,8 +19,8 @@ class SystemConfig:
     """系统全局配置类"""
     
     # ============= 系统级配置 =============
-    # 项目根目录
-    project_root: Path = field(default_factory=lambda: Path(__file__).parent.parent)
+    # 项目根目录（使用类方法获取，避免 lambda）
+    project_root: Path = None
     
     # 最大重试次数
     max_retries: int = 3
@@ -65,6 +69,11 @@ class SystemConfig:
     knowledge_chunk_size: int = 600
     knowledge_chunk_overlap: int = 150
     
+    def __post_init__(self):
+        """初始化后处理"""
+        if self.project_root is None:
+            self.project_root = Path(__file__).parent.parent
+    
     def get_log_path(self) -> Path:
         """获取日志目录路径"""
         log_path = self.project_root / self.log_dir
@@ -88,31 +97,12 @@ class SystemConfig:
         }
 
 
-# 全局单例
-_system_config: Optional[SystemConfig] = None
-
-
-def get_system_config() -> SystemConfig:
-    """获取系统配置单例"""
-    global _system_config
-    if _system_config is None:
-        _system_config = SystemConfig()
-    return _system_config
-
-
-def reset_system_config(config: SystemConfig) -> None:
-    """重置系统配置（用于测试）"""
-    global _system_config
-    _system_config = config
-
-
 # ============= 测试代码 =============
 if __name__ == "__main__":
-    config = get_system_config()
+    config = SystemConfig()
     print("系统配置信息:")
     print(f"  项目根目录: {config.project_root}")
     print(f"  最大重试次数: {config.max_retries}")
     print(f"  Judger Alpha: {config.judger_alpha}")
     print(f"  MCTS 探索系数: {config.mcts_exploration_constant}")
     print(f"  日志目录: {config.get_log_path()}")
-
