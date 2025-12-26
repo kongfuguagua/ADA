@@ -229,10 +229,10 @@ def test_knowledge_service():
         
         try:
             embedding = OpenAIEmbedding()
-            kb = KnowledgeService(
+        kb = KnowledgeService(
                 embedding_model=embedding,
                 storage_path=temp_dir
-            )
+        )
             print(f"✓ KnowledgeService 初始化成功: {kb}")
             
             # 添加知识
@@ -266,9 +266,9 @@ def test_knowledge_service():
         traceback.print_exc()
         return False
 
-
+    
 def test_full_pipeline():
-    """测试完整流程"""
+        """测试完整流程"""
     print("\n" + "=" * 50)
     print("  测试7: 完整流程")
     print("=" * 50)
@@ -294,10 +294,10 @@ def test_full_pipeline():
             state = EnvironmentState(
                 user_instruction="优化发电调度，最小化成本",
                 real_data={"load": 100.0}
-            )
-            
+        )
+        
             result = orchestrator.run(state, max_retries=2)
-            
+        
             print(f"\n运行结果:")
             print(f"  成功: {result['success']}")
             print(f"  尝试次数: {result['attempts']}")

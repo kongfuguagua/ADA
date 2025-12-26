@@ -6,6 +6,7 @@ scipy>=1.7.0
 pydantic>=2.0.0
 python-dotenv>=0.19.0
 tqdm>=4.62.0
+pyyaml>=6.0
 
 # LLM 和 Embedding
 openai>=1.0.0
@@ -23,3 +24,4 @@ lightsim2grid>=0.7.0
 # 可视化 (可选)
 # dash<3.0.0
 # markdown
+swanlab>=0.3.0  # 实验可视化和追踪

@@ -239,8 +239,8 @@ class ProblemFeatureExtractor:
         return min(1.0, score)
     
     def _analyze_constraint_stiffness(
-        self,
-        problem: OptimizationProblem,
+        self, 
+        problem: OptimizationProblem, 
         features: ProblemFeatures
     ) -> float:
         """

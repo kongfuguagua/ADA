@@ -70,7 +70,7 @@ class LLMConfig:
         if not self.base_url:
             raise ValueError("Chat Base URL 未配置，请设置 CLOUD_BASE_URL 环境变量")
         return True
-    
+
     def validate_embedding(self) -> bool:
         """验证 Embedding 配置是否完整"""
         if not self.embedding_api_key:

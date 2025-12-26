@@ -40,8 +40,7 @@ class JudgerAgent(BaseJudger):
         simulator: BaseSimulator = None,
         llm: BaseLLM = None,
         alpha: float = None,
-        pass_threshold: float = None,
-        config: SystemConfig = None
+        pass_threshold: float = None
     ):
         """
         初始化 Judger
@@ -51,12 +50,11 @@ class JudgerAgent(BaseJudger):
             llm: LLM 服务
             alpha: 物理评分权重
             pass_threshold: 通过阈值
-            config: 系统配置（如果为 None 则创建新实例）
         """
-        self.config = config or SystemConfig()
+        config = SystemConfig()
         
-        self.alpha = alpha if alpha is not None else self.config.judger_alpha
-        self.pass_threshold = pass_threshold if pass_threshold is not None else self.config.judger_pass_threshold
+        self.alpha = alpha if alpha is not None else config.judger_alpha
+        self.pass_threshold = pass_threshold if pass_threshold is not None else config.judger_pass_threshold
         
         # 初始化评分器
         self.phy_reward = PhysicalReward(simulator=simulator)

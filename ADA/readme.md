@@ -155,7 +155,7 @@ result = orchestrator.run(state)
 
 print(f"成功: {result['success']}")
 print(f"算法: {result['solution'].algorithm_used}")
-print(f"目标值: {result['solution'].objective_value}")
+    print(f"目标值: {result['solution'].objective_value}")
 ```
 
 ### 4. 与 Grid2Op 环境集成

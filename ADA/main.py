@@ -3,19 +3,19 @@
 ADA (Agile Dispatch Agent) 系统入口
 知识驱动的复杂系统敏捷调度智能体
 
-主循环逻辑：
-1. 环境观测 - 从 Grid2Op 获取当前状态
-2. Planner 规划 - 状态增广 + 问题建模
-3. Solver 求解 - 特征提取 + 算法匹配 + 执行
-4. Judger 评估 - 物理仿真 + 逻辑校验 + 综合打分
-5. 环境执行 - 将解应用到环境
-6. Summarizer 总结 - 提炼经验更新知识库
+功能：
+1. 启动配置 - 解析命令行参数、加载 YAML 配置
+2. 环境初始化 - 创建 Grid2Op 环境（可选）
+3. Agent 初始化 - 创建并配置各智能体
+4. 日志/进度打印 - 统一日志输出和进度显示
+5. SwanLab 绘图 - 实验指标可视化
 
-注意：此模块不支持 Mock 模式，必须配置有效的 LLM API。
+使用方式:
+    python main.py -f yaml/default.yaml
 """
 
 import sys
-import uuid
+import argparse
 from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime
@@ -25,437 +25,348 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 # 导入配置
 from config import SystemConfig, LLMConfig
+from config.yaml_loader import (
+    load_config_from_yaml,
+    create_system_config_from_yaml,
+    create_llm_config_from_yaml,
+)
 
 # 导入数据契约
-from utils.const import (
-    EnvironmentState,
-    OptimizationProblem,
-    Solution,
-    Feedback,
-    FeedbackType,
-    ExecutionTrace,
-)
+from utils.const import EnvironmentState
 from utils.logger import get_logger
-from utils.llm import OpenAIChat
-from utils.embeddings import OpenAIEmbedding
 
-# 导入知识库
-from knowledgebase.service import KnowledgeService
+# 导入编排器
+from orchestrator import ADAOrchestrator
 
-# 导入各个智能体
-from Planner.core import PlannerAgent
-from Planner.tools.registry import create_default_registry
-
-from Solver.solver import SolverAgent
-
-from Judger.core import JudgerAgent
-
-from Summarizer.core import SummarizerAgent
+# 导入环境（可选）
+try:
+    from env.grid2op_env import create_grid2op_env
+    HAS_GRID2OP = True
+except ImportError:
+    HAS_GRID2OP = False
+    print("警告: Grid2Op 环境模块未找到，将使用模拟环境")
 
 logger = get_logger("Main")
 
+# SwanLab 初始化（可选）
+try:
+    import swanlab
+    HAS_SWANLAB = True
+except ImportError:
+    HAS_SWANLAB = False
+    print("提示: SwanLab 未安装，将跳过实验可视化。安装: pip install swanlab")
 
-class ADAOrchestrator:
-    """
-    ADA 系统编排器
-    协调各智能体完成调度任务
-    """
-    
-    def __init__(
-        self,
-        kb_storage_path: str = None,
-        env=None
-    ):
+
+def parse_args():
+    """解析命令行参数"""
+    parser = argparse.ArgumentParser(
+        description="ADA - Agile Dispatch Agent 系统启动器",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  python main.py -f yaml/default.yaml
+  python main.py -f yaml/default.yaml --verbose
+  python main.py -f yaml/default.yaml --no-swanlab
         """
-        初始化编排器
+    )
+    
+    parser.add_argument(
+        "-f", "--config",
+        type=str,
+        default='/Users/yangsiyu/Desktop/ADA/ADA/yaml/default.yaml',
+        help="YAML 配置文件路径（如: yaml/default.yaml）"
+    )
+    
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="打印详细信息"
+    )
+    
+    parser.add_argument(
+        "--no-swanlab",
+        action="store_true",
+        help="禁用 SwanLab 可视化"
+    )
+    
+    return parser.parse_args()
+
+
+def init_swanlab(config_dict: Dict[str, Any], enabled: bool = True) -> Optional[Any]:
+    """
+    初始化 SwanLab
         
         Args:
-            kb_storage_path: 知识库存储路径
-            env: Grid2Op 环境实例（可选）
-        
-        Raises:
-            ValueError: API 配置无效
-        """
-        self.config = SystemConfig()
-        self.llm_config = LLMConfig()
-        self.env = env
-        
-        # 验证并初始化 LLM 和 Embedding
-        self._validate_config()
-        self.llm, self.embedding = self._init_llm_services()
-        
-        # 初始化知识库
-        storage_path = kb_storage_path or str(self.config.get_knowledge_path())
-        self.kb = KnowledgeService(
-            embedding_model=self.embedding,
-            storage_path=storage_path
-        )
-        logger.info(f"知识库已加载: {len(self.kb)} 条记录")
-        
-        # 初始化工具注册表（绑定环境）
-        self.tools = create_default_registry(env=env)
-        
-        # 初始化各智能体
-        self._init_agents()
-        
-        logger.info("ADA 系统初始化完成")
-    
-    def _validate_config(self) -> None:
-        """验证 API 配置"""
-        if not self.llm_config.api_key:
-            raise ValueError(
-                "未配置 LLM API Key。\n"
-                "请在 .env 文件中设置 CLOUD_API_KEY 环境变量。\n"
-                "示例: CLOUD_API_KEY=your-api-key-here"
-            )
-    
-    def _init_llm_services(self):
-        """初始化 LLM 和 Embedding 服务"""
-        # 创建 LLM
-        llm = OpenAIChat(
-            model=self.llm_config.model_name,
-            api_key=self.llm_config.api_key,
-            base_url=self.llm_config.base_url,
-            temperature=self.llm_config.temperature
-        )
-        logger.info(f"LLM 已初始化: {self.llm_config.model_name}")
-        
-        # 创建 Embedding
-        embedding = OpenAIEmbedding(
-            api_key=self.llm_config.embedding_api_key,
-            base_url=self.llm_config.embedding_base_url,
-            model=self.llm_config.embedding_model
-        )
-        logger.info(f"Embedding 已初始化: {self.llm_config.embedding_model}")
-        
-        return llm, embedding
-    
-    def _init_agents(self):
-        """初始化各智能体"""
-        self.planner = PlannerAgent(
-            llm=self.llm,
-            tools=self.tools,
-            kb=self.kb,
-            config=self.config
-        )
-        
-        self.solver = SolverAgent(
-            llm=self.llm,
-            config=self.config
-        )
-        
-        self.judger = JudgerAgent(
-            llm=self.llm,
-            config=self.config
-        )
-        
-        self.summarizer = SummarizerAgent(
-            kb=self.kb,
-            llm=self.llm,
-            config=self.config
-        )
-    
-    def set_env(self, env):
-        """设置/更新环境"""
-        self.env = env
-        self.tools.set_env(env)
-    
-    def run(
-        self,
-        env_state: EnvironmentState = None,
-        max_retries: int = None
-    ) -> Dict[str, Any]:
-        """
-        运行主循环
-        
-        Args:
-            env_state: 环境状态（如果有 Grid2Op 环境则自动获取）
-            max_retries: 最大重试次数
+        config_dict: YAML 配置字典
+        enabled: 是否启用
         
         Returns:
-            运行结果 {success, solution, trace, attempts}
-        """
-        max_retries = max_retries or self.config.max_retries
-        
-        # 获取环境状态
-        if env_state is None:
-            env_state = self._get_env_state()
-        
-        # 验证环境状态
-        if not isinstance(env_state, EnvironmentState):
-            raise ValueError(f"env_state 必须是 EnvironmentState 类型，当前类型: {type(env_state)}")
-        
-        trace_id = f"trace_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
-        logger.trace_start(trace_id, env_state.model_dump())
-        
-        current_feedback: Optional[Feedback] = None
-        problem: Optional[OptimizationProblem] = None
-        solution: Optional[Solution] = None
-        
-        for attempt in range(max_retries):
-            logger.info(f"=== 尝试 {attempt + 1}/{max_retries} ===")
-            
-            try:
-                # 1. Plan - 生成优化问题
-                logger.info("[Planner] 开始规划...")
-                problem = self.planner.plan(env_state, retry_feedback=current_feedback)
-                logger.info(f"[Planner] 生成问题: {len(problem.variables)} 个变量")
-                
-                # 2. Solve - 求解优化问题
-                logger.info("[Solver] 开始求解...")
-                solution = self.solver.solve(problem)
-                logger.info(f"[Solver] 求解完成: 可行={solution.is_feasible}")
-                
-                # 3. Judge - 评估解
-                logger.info("[Judger] 开始评估...")
-                current_feedback = self.judger.evaluate(problem, solution)
-                logger.info(f"[Judger] 评估结果: {current_feedback.feedback_type.value}")
-                
-                # 4. 决策分支
-                if current_feedback.feedback_type == FeedbackType.PASSED:
-                    logger.info("✓ 成功！解已通过评估")
-                    
-                    # 5. 成功后触发总结
-                    trace = ExecutionTrace(
-                        trace_id=trace_id,
-                        environment=env_state,
-                        problem=problem,
-                        solution=solution,
-                        feedback=current_feedback,
-                        tool_chain=self.planner.get_tool_chain(),
-                        attempt_count=attempt + 1
-                    )
-                    
-                    logger.info("[Summarizer] 开始总结...")
-                    self.summarizer.summarize(trace)
-                    
-                    logger.trace_end(trace_id, success=True, score=current_feedback.score)
-                    
-                    return {
-                        "success": True,
-                        "solution": solution,
-                        "problem": problem,
-                        "feedback": current_feedback,
-                        "trace": trace,
-                        "attempts": attempt + 1
-                    }
-                else:
-                    logger.warning(f"✗ 失败: {current_feedback.diagnosis}")
-                    
-            except Exception as e:
-                logger.error(f"运行异常: {e}")
-                import traceback
-                traceback.print_exc()
-                current_feedback = Feedback(
-                    feedback_type=FeedbackType.RUNTIME_ERROR,
-                    score=0.0,
-                    diagnosis=str(e),
-                    suggested_fix="检查系统配置和输入数据"
-                )
-        
-        logger.error(f"达到最大重试次数 ({max_retries})，任务失败")
-        logger.trace_end(trace_id, success=False, score=0.0)
-        
-        return {
-            "success": False,
-            "solution": solution,
-            "problem": problem,
-            "feedback": current_feedback,
-            "trace": None,
-            "attempts": max_retries
-        }
+        SwanLab 实例（如果启用）或 None
+    """
+    if not enabled or not HAS_SWANLAB:
+        return None
     
-    def _get_env_state(self) -> EnvironmentState:
-        """从环境获取状态"""
-        if self.env is not None:
-            try:
-                if hasattr(self.env, 'get_state_for_planner'):
-                    grid_state = self.env.get_state_for_planner()
-                    if grid_state:
-                        return EnvironmentState(
-                            user_instruction="优化电网调度，保持系统稳定运行",
-                            real_data={
-                                "total_load": grid_state.get("total_load_mw", 0),
-                                "total_gen": grid_state.get("total_gen_mw", 0),
-                                "max_rho": grid_state.get("max_rho", 0),
-                            },
-                            extra_context=grid_state
-                        )
-            except Exception as e:
-                logger.warning(f"从环境获取状态失败: {e}，使用默认状态")
-        
-        # 默认状态
-        return EnvironmentState(
-            user_instruction="优化调度任务",
-            real_data={"load": 100.0, "generation": 105.0}
+    experiment_config = config_dict.get("experiment", {})
+    swanlab_config = experiment_config.get("swanlab", {})
+    
+    if not swanlab_config.get("enabled", True):
+        return None
+    
+    try:
+        run = swanlab.init(
+            project=swanlab_config.get("project", "ada"),
+            experiment_name=swanlab_config.get("experiment_name", experiment_config.get("name", "ada_experiment")),
+            description=swanlab_config.get("description", "ADA 系统实验"),
+            tags=swanlab_config.get("tags", ["ada"]),
         )
+        logger.info("SwanLab 已初始化")
+        return run
+    except Exception as e:
+        logger.warning(f"SwanLab 初始化失败: {e}")
+        return None
+
+
+def init_environment(config_dict: Dict[str, Any]):
+    """
+    初始化环境
     
-    def run_episode(
-        self,
-        max_steps: int = 100,
-        verbose: bool = True
-    ) -> Dict[str, Any]:
-        """
-        运行一个完整的回合（与 Grid2Op 环境交互）
-        
-        Args:
-            max_steps: 最大步数
-            verbose: 是否打印详细信息
-        
-        Returns:
-            回合统计信息
-        """
-        if self.env is None:
-            raise ValueError("需要设置 Grid2Op 环境")
-        
-        # 重置环境
-        self.env.reset()
-        
-        total_reward = 0.0
-        step_count = 0
-        success_count = 0
-        
-        for step in range(max_steps):
-            step_count += 1
-            
-            # 运行 ADA 主循环
-            result = self.run(max_retries=self.config.max_retries)
-            
-            if result["success"]:
-                success_count += 1
-                
-                # 将解应用到环境（简化版）
-                # TODO: 这里应该使用 solution 来构建 action，而不是 do_nothing
-                try:
-                    if hasattr(self.env, 'get_do_nothing_action'):
-                        action = self.env.get_do_nothing_action()
-                    else:
-                        # 如果没有该方法，尝试使用 solution 构建 action
-                        action = None
-                    
-                    if action is not None:
-                        obs, reward, done, info = self.env.step(action)
-                        total_reward += reward
-                    else:
-                        # 如果无法构建 action，跳过这一步
-                        logger.warning(f"Step {step}: 无法构建环境动作，跳过")
-                        continue
-                    
-                    if verbose and step % 10 == 0:
-                        try:
-                            if hasattr(self.env, 'get_observation_info'):
-                                obs_info = self.env.get_observation_info()
-                                max_rho = obs_info.get('max_rho', 0) if isinstance(obs_info, dict) else 0
-                                print(f"Step {step}: reward={reward:.2f}, max_rho={max_rho:.2%}")
-                            else:
-                                print(f"Step {step}: reward={reward:.2f}")
-                        except Exception as e:
-                            logger.debug(f"获取观察信息失败: {e}")
-                            print(f"Step {step}: reward={reward:.2f}")
-                    
-                    if done:
-                        if verbose:
-                            print(f"回合在第 {step} 步结束")
-                        break
-                except Exception as e:
-                    logger.error(f"Step {step}: 环境执行失败: {e}")
-                    if verbose:
-                        print(f"Step {step}: 环境执行失败")
-            else:
-                if verbose:
-                    print(f"Step {step}: ADA 规划失败")
-        
-        return {
-            "steps": step_count,
-            "total_reward": total_reward,
-            "success_rate": success_count / step_count if step_count > 0 else 0,
-        }
+    Args:
+        config_dict: YAML 配置字典
     
-    def get_status(self) -> Dict[str, Any]:
-        """获取系统状态"""
-        return {
-            "knowledge_count": len(self.kb),
-            "algorithms": self.solver.list_algorithms(),
-            "tools": self.tools.list_tools(),
-            "has_env": self.env is not None,
-        }
+    Returns:
+        环境实例（Grid2Op 或 None）
+    """
+    env_config = config_dict.get("env", {})
+    env_type = env_config.get("type", "none")
+    
+    if env_type == "grid2op" and HAS_GRID2OP:
+        env_name = env_config.get("env_name", "l2rpn_wcci_2022")
+        logger.info(f"初始化 Grid2Op 环境: {env_name}")
+        try:
+            env = create_grid2op_env(env_name)
+            logger.info("Grid2Op 环境初始化成功")
+            return env
+        except Exception as e:
+            logger.error(f"Grid2Op 环境初始化失败: {e}")
+            logger.info("将使用模拟环境")
+            return None
+    elif env_type == "mock":
+        logger.info("使用模拟环境")
+        return None
+    else:
+        logger.info("未配置环境，使用默认模拟环境")
+        return None
+
+
+def print_progress(episode: int, step: int, result: Dict[str, Any], verbose: bool = False):
+    """
+    打印进度信息
+    
+    Args:
+        episode: 当前回合数
+        step: 当前步数
+        result: 运行结果
+        verbose: 是否打印详细信息
+    """
+    if result["success"]:
+        status = "✓"
+        score = result.get("feedback", {}).score if result.get("feedback") else 0.0
+        print(f"[Episode {episode}, Step {step}] {status} 成功 | 评分: {score:.4f}")
+        
+        if verbose and result.get("solution"):
+            solution = result["solution"]
+            print(f"  算法: {solution.algorithm_used}")
+            print(f"  目标值: {solution.objective_value:.4f}")
+    else:
+        status = "✗"
+        diagnosis = result.get("feedback", {}).diagnosis if result.get("feedback") else "未知错误"
+        print(f"[Episode {episode}, Step {step}] {status} 失败 | {diagnosis[:50]}")
+
+
+def log_to_swanlab(swanlab_run: Any, metrics: Dict[str, float], step: int):
+    """
+    记录指标到 SwanLab
+    
+    Args:
+        swanlab_run: SwanLab 实例
+        metrics: 指标字典
+        step: 当前步数
+    """
+    if swanlab_run is None:
+        return
+    
+    try:
+        swanlab.log(metrics, step=step)
+    except Exception as e:
+        logger.warning(f"SwanLab 记录失败: {e}")
 
 
 def main():
     """主函数"""
+    # 解析命令行参数
+    args = parse_args()
+    
+    # 打印启动信息
     print("=" * 60)
     print("  ADA - Agile Dispatch Agent")
     print("  知识驱动的复杂系统敏捷调度智能体")
     print("=" * 60)
     print()
     
-    # 检查 API 配置
-    llm_config = LLMConfig()
-    if not llm_config.api_key:
-        print("错误: 未配置 LLM API Key")
-        print("请在 .env 文件中设置 CLOUD_API_KEY 环境变量")
-        print()
-        print("示例 .env 文件内容:")
-        print("  CLOUD_API_KEY=your-api-key-here")
-        print("  CLOUD_BASE_URL=https://api.deepseek.com")
-        print("  CLOUD_MODEL=deepseek-chat")
+    # 加载 YAML 配置
+    config_path = Path(args.config)
+    if not config_path.exists():
+        print(f"错误: 配置文件不存在: {config_path}")
         return None
     
-    print(f"✓ 使用 LLM: {llm_config.model_name}")
+    logger.info(f"加载配置文件: {config_path}")
+    try:
+        config_dict = load_config_from_yaml(str(config_path))
+        system_config = create_system_config_from_yaml(config_dict)
+        llm_config = create_llm_config_from_yaml(config_dict)
+    except Exception as e:
+        print(f"错误: 配置加载失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+    
+    # 验证配置
+    try:
+        llm_config.validate()
+        llm_config.validate_embedding()
+    except ValueError as e:
+        print(f"错误: 配置验证失败: {e}")
+        return None
+    
+    print(f"✓ 配置加载成功")
+    print(f"  Chat 模型: {llm_config.model_name}")
+    print(f"  Embedding 模型: {llm_config.embedding_model}")
     print()
+    
+    # 初始化 SwanLab
+    swanlab_run = None
+    if not args.no_swanlab:
+        swanlab_run = init_swanlab(config_dict)
+    
+    # 初始化环境
+    env = init_environment(config_dict)
     
     # 创建编排器
     try:
-        orchestrator = ADAOrchestrator()
+        orchestrator = ADAOrchestrator(
+            system_config=system_config,
+            llm_config=llm_config,
+            env=env
+        )
+        logger.info("ADA 系统初始化完成")
     except Exception as e:
-        print(f"初始化失败: {e}")
+        print(f"错误: 系统初始化失败: {e}")
+        import traceback
+        traceback.print_exc()
         return None
     
-    # 创建测试环境状态
-    env_state = EnvironmentState(
-        user_instruction="优化电网调度，在满足负载需求的前提下最小化发电成本",
-        real_data={
-            "total_load": 100.0,
-            "price_electricity": 0.5,
-            "generator_capacity": 150.0
-        },
-        extra_context={
-            "time_horizon": 24,
-            "weather": "晴"
-        }
-    )
+    # 获取实验配置
+    experiment_config = config_dict.get("experiment", {})
+    max_episodes = experiment_config.get("max_episodes", 1)
+    max_steps_per_episode = experiment_config.get("max_steps_per_episode", 100)
+    verbose = args.verbose or experiment_config.get("verbose", False)
     
-    print("输入环境状态:")
-    print(env_state.to_prompt_string())
+    print(f"开始运行实验:")
+    print(f"  最大回合数: {max_episodes}")
+    print(f"  每回合最大步数: {max_steps_per_episode}")
     print()
     
-    # 运行主循环
-    result = orchestrator.run(env_state)
+    # 运行实验
+    all_results = []
+    total_success = 0
+    total_steps = 0
     
-    print()
-    print("=" * 60)
-    print("运行结果:")
-    print(f"  成功: {result['success']}")
-    print(f"  尝试次数: {result['attempts']}")
+    for episode in range(max_episodes):
+        print(f"\n{'=' * 60}")
+        print(f"Episode {episode + 1}/{max_episodes}")
+        print(f"{'=' * 60}")
+        
+        episode_results = []
+        episode_success = 0
+        
+        for step in range(max_steps_per_episode):
+            total_steps += 1
+            
+            # 创建环境状态
+            # 如果 env 为 None，orchestrator.run() 会自动使用默认状态
+            # 如果 env 存在，orchestrator.run() 会从环境获取状态
+            env_state = None  # 让 orchestrator 自动处理
+            
+            # 运行主循环
+            result = orchestrator.run(env_state=env_state)
+            episode_results.append(result)
+            
+            # 打印进度
+            print_progress(episode + 1, step + 1, result, verbose)
+            
+            # 记录到 SwanLab
+            if swanlab_run is not None:
+                metrics = {
+                    "success": 1.0 if result["success"] else 0.0,
+                    "score": result.get("feedback", {}).score if result.get("feedback") else 0.0,
+                    "attempts": result.get("attempts", 0),
+                }
+                if result.get("solution"):
+                    metrics["objective_value"] = result["solution"].objective_value
+                log_to_swanlab(swanlab_run, metrics, total_steps)
+            
+            if result["success"]:
+                episode_success += 1
+                total_success += 1
+                
+                # 如果使用 Grid2Op 环境，执行动作
+                if env is not None:
+                    # TODO: 将 solution 转换为 Grid2Op action
+                    pass
+        
+        all_results.append(episode_results)
+        
+        # 打印回合统计
+        success_rate = episode_success / max_steps_per_episode if max_steps_per_episode > 0 else 0
+        print(f"\nEpisode {episode + 1} 完成:")
+        print(f"  成功次数: {episode_success}/{max_steps_per_episode}")
+        print(f"  成功率: {success_rate:.2%}")
     
-    if result['success'] and result['solution']:
-        solution = result['solution']
-        print(f"  算法: {solution.algorithm_used}")
-        print(f"  目标值: {solution.objective_value:.4f}")
-        print(f"  决策变量: {solution.decision_variables}")
+    # 打印总体统计
+    print(f"\n{'=' * 60}")
+    print("实验完成")
+    print(f"{'=' * 60}")
+    overall_success_rate = total_success / total_steps if total_steps > 0 else 0
+    print(f"总步数: {total_steps}")
+    print(f"总成功次数: {total_success}")
+    print(f"总体成功率: {overall_success_rate:.2%}")
     
-    if result['feedback']:
-        print(f"  评估类型: {result['feedback'].feedback_type.value}")
-        print(f"  评分: {result['feedback'].score:.4f}")
-    
-    print()
-    print("系统状态:")
+    # 系统状态
     status = orchestrator.get_status()
+    print(f"\n系统状态:")
     print(f"  知识库条目: {status['knowledge_count']}")
     print(f"  可用算法: {status['algorithms']}")
     print(f"  可用工具: {status['tools']}")
+    print(f"  环境状态: {'已连接' if status['has_env'] else '未连接'}")
     
-    return result
+    # 记录最终指标到 SwanLab
+    if swanlab_run is not None:
+        final_metrics = {
+            "final_success_rate": overall_success_rate,
+            "total_steps": total_steps,
+            "total_success": total_success,
+            "knowledge_count": status['knowledge_count'],
+        }
+        log_to_swanlab(swanlab_run, final_metrics, total_steps)
+        swanlab.finish()
+    
+    return {
+        "results": all_results,
+        "total_steps": total_steps,
+        "total_success": total_success,
+        "success_rate": overall_success_rate,
+        "status": status,
+    }
 
 
 if __name__ == "__main__":

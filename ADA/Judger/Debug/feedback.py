@@ -119,7 +119,17 @@ class FeedbackGenerator:
         Returns:
             (feedback_type, error_source, diagnosis, suggested_fix)
         """
-        # 优先检查物理违规
+        # ===== 1. 检查问题定义完整性（最优先） =====
+        problem_issues = self._check_problem_completeness(problem)
+        if problem_issues:
+            return (
+                FeedbackType.LOGICAL_ERROR,
+                AgentRole.PLANNER,
+                f"问题定义不完整: {problem_issues}",
+                "请重新规划，确保问题定义完整（包含目标函数、约束条件和变量定义）"
+            )
+        
+        # ===== 2. 检查物理违规 =====
         if not phy_details.get("is_safe", True):
             violations = phy_details.get("violation_details", {})
             diagnosis = f"物理约束违规: {violations}"
@@ -140,7 +150,7 @@ class FeedbackGenerator:
                     "求解器可能陷入局部最优，尝试使用全局优化算法"
                 )
         
-        # 检查求解器失败
+        # ===== 3. 检查求解器失败 =====
         if not solution.is_feasible:
             return (
                 FeedbackType.RUNTIME_ERROR,
@@ -149,7 +159,7 @@ class FeedbackGenerator:
                 "检查问题是否有可行解，或尝试其他算法"
             )
         
-        # 检查逻辑问题
+        # ===== 4. 检查逻辑问题 =====
         if not llm_details.get("is_logical", True):
             issues = llm_details.get("issues", [])
             return (
@@ -159,13 +169,53 @@ class FeedbackGenerator:
                 llm_details.get("suggestions", ["检查建模逻辑"])[0] if llm_details.get("suggestions") else "检查建模逻辑"
             )
         
-        # 默认：评分过低
+        # ===== 5. 默认：评分过低 =====
         return (
             FeedbackType.LOGICAL_ERROR,
             AgentRole.PLANNER,
             "解的质量未达到要求",
             "请优化目标函数或调整约束条件"
         )
+    
+    def _check_problem_completeness(self, problem: OptimizationProblem) -> str:
+        """
+        检查问题定义的完整性
+        
+        Args:
+            problem: 优化问题
+        
+        Returns:
+            问题描述（如果有问题），否则返回空字符串
+        """
+        issues = []
+        
+        # 检查目标函数
+        if not problem.objective_function_latex or problem.objective_function_latex.strip() == "":
+            issues.append("缺少目标函数")
+        elif len(problem.objective_function_latex.strip()) < 5:  # 太短可能不完整
+            issues.append("目标函数定义不完整")
+        
+        # 检查变量
+        if len(problem.variables) == 0:
+            issues.append("没有定义变量")
+        elif len(problem.variables) == 1 and len(problem.constraints_latex) == 0:
+            # 只有一个变量且没有约束，可能是解析失败后的默认值
+            issues.append("问题定义过于简单（可能解析失败）")
+        
+        # 检查约束（某些问题可能不需要约束，但通常至少应该有边界约束）
+        # 如果变量有边界，则认为有约束
+        has_bounds = any(
+            var.lower_bound != float('-inf') or var.upper_bound != float('inf')
+            for var in problem.variables
+        )
+        if not has_bounds and len(problem.constraints_latex) == 0:
+            issues.append("缺少约束条件（变量边界或约束方程）")
+        
+        # 检查建模理由（如果为空，可能表示规划不完整）
+        if not problem.modeling_rationale or problem.modeling_rationale.strip() == "":
+            issues.append("缺少建模理由说明")
+        
+        return "; ".join(issues) if issues else ""
     
     def _is_model_error(
         self, 

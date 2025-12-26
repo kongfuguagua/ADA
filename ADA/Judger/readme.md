@@ -14,6 +14,7 @@ Judger 是系统的"质检员"，负责建立**物理安全与逻辑合理的融
 | 故障溯源 (Model Error vs Solver Error) | ✅ 已实现 | `Debug/feedback.py: diagnose_with_llm()` |
 | 结构化反馈生成 | ✅ 已实现 | `Debug/feedback.py: FeedbackGenerator` |
 | 硬约束违规检测 | ✅ 已实现 | `Reward/phy_reward.py` |
+| 问题定义完整性检查 | ✅ 已实现 | `Debug/feedback.py: _check_problem_completeness()` |
 
 ## 3. 核心逻辑：混合评分与反馈
 

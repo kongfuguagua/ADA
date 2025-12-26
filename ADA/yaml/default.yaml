@@ -1,0 +1,84 @@
+# -*- coding: utf-8 -*-
+# ADA 系统启动配置文件
+# 使用方式: python main.py -f yaml/default.yaml
+
+# ============= 系统级配置 =============
+system:
+  # 最大重试次数
+  max_retries: 3
+  
+  # 日志配置
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  log_dir: "log"
+  
+  # 知识库存储路径
+  knowledge_storage_path: "/Users/yangsiyu/Desktop/ADA/ADA/knowledgebase/storage"
+  knowledge_top_k: 3
+  knowledge_chunk_size: 600
+  knowledge_chunk_overlap: 150
+
+# ============= Agent 配置 =============
+agents:
+  planner:
+    # 状态增广最大步数
+    max_augmentation_steps: 5
+  
+  solver:
+    # 求解超时时间（秒）
+    timeout: 60.0
+    # 是否使用 LLM 辅助特征提取
+    use_llm_features: false
+  
+  judger:
+    # 物理评分权重 α (R = α * R_ENV + (1-α) * R_LLM)
+    alpha: 0.7
+    # 通过阈值
+    pass_threshold: 0.6
+  
+  summarizer:
+    # MCTS 探索系数 (UCB 公式中的 C)
+    mcts_exploration_constant: 1.414
+    # 最小入库分数阈值
+    min_score_threshold: 0.7
+
+# ============= LLM 配置 =============
+llm:
+  # Chat 模型配置
+  chat:
+    model: "${CLOUD_MODEL}"  # 从环境变量读取，或直接写模型名
+    api_key: "${CLOUD_API_KEY}"
+    base_url: "${CLOUD_BASE_URL}"
+    temperature: 0.7
+    max_tokens: 4096
+  
+  # Embedding 模型配置
+  embedding:
+    model: "${OPENAI_API_MODEL}"
+    api_key: "${OPENAI_API_KEY}"
+    base_url: "${OPENAI_BASE_URL}"
+
+# ============= 环境配置 =============
+env:
+  # Grid2Op 环境配置（可选）
+  type: "grid2op"  # grid2op, mock, none
+  env_name: "l2rpn_wcci_2022"  # Grid2Op 环境名称
+  # 如果 type 为 none，则使用默认模拟环境
+
+# ============= 实验配置 =============
+experiment:
+  # 实验名称（用于日志和 swanlab）
+  name: "ada_experiment"
+  
+  # SwanLab 配置（可选）
+  swanlab:
+    enabled: true
+    project: "ada"
+    experiment_name: "ADA 系统实验"
+    description: "ADA 系统实验"
+    tags: ["ada", "grid2op", "optimization"]
+  
+  # 运行配置
+  max_episodes: 1  # 运行的最大回合数
+  max_steps_per_episode: 100  # 每个回合的最大步数
+  verbose: true  # 是否打印详细信息
+

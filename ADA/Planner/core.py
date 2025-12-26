@@ -47,8 +47,7 @@ class PlannerAgent(BasePlanner):
         llm: BaseLLM,
         tools: ToolRegistry = None,
         kb: KnowledgeService = None,
-        max_augmentation_steps: int = None,
-        config: SystemConfig = None
+        max_augmentation_steps: int = None
     ):
         """
         初始化 Planner
@@ -58,14 +57,13 @@ class PlannerAgent(BasePlanner):
             tools: 工具注册表
             kb: 知识库服务
             max_augmentation_steps: 最大增广步数
-            config: 系统配置（如果为 None 则创建新实例）
         """
         self.llm = llm
         self.tools = tools or create_default_registry()
         self.kb = kb
         
-        self.config = config or SystemConfig()
-        self.max_steps = max_augmentation_steps or self.config.planner_max_augmentation_steps
+        config = SystemConfig()
+        self.max_steps = max_augmentation_steps or config.planner_max_augmentation_steps
         
         # 记录本次规划的工具调用链
         self._tool_chain: List[AugmentationStep] = []

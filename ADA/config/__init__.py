@@ -5,6 +5,7 @@ ADA 全局配置模块
 
 使用方式:
     from config import LLMConfig, SystemConfig
+    from config.yaml_loader import load_config_from_yaml
     
     llm_config = LLMConfig()  # 每次创建新实例
     sys_config = SystemConfig()
@@ -12,8 +13,10 @@ ADA 全局配置模块
 
 from .llm_config import LLMConfig
 from .system_config import SystemConfig
+from . import yaml_loader
 
 __all__ = [
     'LLMConfig',
     'SystemConfig',
+    'yaml_loader',
 ]

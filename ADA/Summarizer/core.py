@@ -75,8 +75,7 @@ class SummarizerAgent(BaseSummarizer):
         kb: KnowledgeService,
         llm: BaseLLM = None,
         exploration_constant: float = None,
-        min_score_threshold: float = None,
-        config: SystemConfig = None
+        min_score_threshold: float = None
     ):
         """
         初始化 Summarizer
@@ -86,14 +85,13 @@ class SummarizerAgent(BaseSummarizer):
             llm: LLM 服务
             exploration_constant: MCTS 探索系数
             min_score_threshold: 最小入库分数阈值
-            config: 系统配置（如果为 None 则创建新实例）
         """
-        self.config = config or SystemConfig()
+        config = SystemConfig()
         
         self.kb = kb
         self.llm = llm
-        self.exploration_constant = exploration_constant or self.config.mcts_exploration_constant
-        self.min_score_threshold = min_score_threshold or self.config.summarizer_min_score_threshold
+        self.exploration_constant = exploration_constant or config.mcts_exploration_constant
+        self.min_score_threshold = min_score_threshold or config.summarizer_min_score_threshold
         
         # 知识更新器
         self.knowledge_updater = KnowledgeUpdater(

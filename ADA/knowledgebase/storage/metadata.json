@@ -1,16 +1,45 @@
 [
   {
-    "source_trace": "trace_20251226_152709_913883c2",
-    "score": 0.8079999999999999,
-    "timestamp": "2025-12-26T15:27:09.683881",
+    "source_trace": "trace_20251226_183610_f8435e90",
+    "score": 0.9279999999999999,
+    "timestamp": "2025-12-26T18:36:46.672195",
+    "tool_count": 3,
+    "type": "action_knowledge"
+  },
+  {
+    "source_trace": "trace_20251226_183610_f8435e90",
+    "score": 0.9279999999999999,
+    "timestamp": "2025-12-26T18:36:50.743698",
     "algorithm": "PSOOptimizer",
     "objective_value": 0.0,
     "type": "task_knowledge"
   },
   {
-    "source_trace": "trace_20251226_152709_9c675030",
-    "score": 0.8079999999999999,
-    "timestamp": "2025-12-26T15:27:10.276723",
+    "source_trace": "trace_20251226_183650_b61d065f",
+    "score": 0.7479999999999999,
+    "timestamp": "2025-12-26T18:37:37.240935",
+    "tool_count": 3,
+    "type": "action_knowledge"
+  },
+  {
+    "source_trace": "trace_20251226_183650_b61d065f",
+    "score": 0.7479999999999999,
+    "timestamp": "2025-12-26T18:37:40.264867",
+    "algorithm": "PSOOptimizer",
+    "objective_value": 0.0,
+    "type": "task_knowledge"
+  },
+  {
+    "source_trace": "trace_20251226_183740_4347abaa",
+    "score": 0.7479999999999999,
+    "timestamp": "2025-12-26T18:38:23.800105",
+    "tool_count": 3,
+    "type": "action_knowledge"
+  },
+  {
+    "source_trace": "trace_20251226_183740_4347abaa",
+    "score": 0.7479999999999999,
+    "timestamp": "2025-12-26T18:38:26.550738",
     "algorithm": "PSOOptimizer",
     "objective_value": 0.0,
     "type": "task_knowledge"

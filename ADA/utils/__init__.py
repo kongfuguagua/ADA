@@ -52,7 +52,7 @@ from .embeddings import BaseEmbeddings, OpenAIEmbedding
 __all__ = [
     # 枚举
     'VariableType',
-    'KnowledgeType',
+    'KnowledgeType', 
     'FeedbackType',
     
     # 数据结构

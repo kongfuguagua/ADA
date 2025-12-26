@@ -54,8 +54,7 @@ class SolverAgent(BaseSolver):
         algorithms: List[BaseSolverStrategy] = None,
         llm=None,
         timeout: float = None,
-        use_llm_features: bool = False,
-        config: SystemConfig = None
+        use_llm_features: bool = False
     ):
         """
         初始化 Solver
@@ -65,10 +64,9 @@ class SolverAgent(BaseSolver):
             llm: LLM 服务（用于辅助特征分析）
             timeout: 求解超时时间
             use_llm_features: 是否使用 LLM 辅助特征提取
-            config: 系统配置（如果为 None 则创建新实例）
         """
-        self.config = config or SystemConfig()
-        self.timeout = timeout or self.config.solver_timeout
+        config = SystemConfig()
+        self.timeout = timeout or config.solver_timeout
         self.use_llm_features = use_llm_features
         
         # 初始化组件
@@ -102,14 +100,31 @@ class SolverAgent(BaseSolver):
         """
         求解优化问题
         
-        流程：特征提取 -> 算法匹配 -> 执行求解
+        流程：问题验证 -> 特征提取 -> 算法匹配 -> 执行求解
         
         Args:
             problem: 优化问题
         
         Returns:
             求解结果
+        
+        Raises:
+            ValueError: 问题定义不完整或无效
         """
+        # 0. 问题验证（鲁棒性检查）
+        validation_error = self._validate_problem(problem)
+        if validation_error:
+            logger.warning(f"问题定义验证失败: {validation_error}")
+            # 返回一个失败的 Solution，而不是抛出异常
+            return Solution(
+                is_feasible=False,
+                algorithm_used="None",
+                decision_variables={},
+                objective_value=float('inf'),
+                solving_time=0.0,
+                solver_message=f"问题定义验证失败: {validation_error}"
+            )
+        
         logger.info("开始求解",
                    variables=len(problem.variables),
                    constraints=len(problem.constraints_latex))
@@ -128,7 +143,18 @@ class SolverAgent(BaseSolver):
         logger.info(f"选择算法: {self._selected_algorithm}")
         
         # 3. 执行求解
-        solution = best_algo.solve(problem)
+        try:
+            solution = best_algo.solve(problem)
+        except Exception as e:
+            logger.error(f"求解器执行失败: {e}")
+            return Solution(
+                is_feasible=False,
+                algorithm_used=self._selected_algorithm,
+                decision_variables={},
+                objective_value=float('inf'),
+                solving_time=0.0,
+                solver_message=f"求解器异常: {str(e)}"
+            )
         
         logger.info("求解完成",
                    feasible=solution.is_feasible,
@@ -136,6 +162,46 @@ class SolverAgent(BaseSolver):
                    time=f"{solution.solving_time:.4f}s")
         
         return solution
+    
+    def _validate_problem(self, problem: OptimizationProblem) -> str:
+        """
+        验证问题定义的合理性
+        
+        Args:
+            problem: 优化问题
+        
+        Returns:
+            错误描述（如果有问题），否则返回空字符串
+        """
+        # 检查目标函数
+        if not problem.objective_function_latex or len(problem.objective_function_latex.strip()) < 3:
+            return "目标函数定义不完整或为空"
+        
+        # 检查变量
+        if len(problem.variables) == 0:
+            return "问题没有定义任何变量"
+        
+        # 检查变量名称唯一性
+        var_names = [var.name for var in problem.variables]
+        if len(var_names) != len(set(var_names)):
+            return "变量名称重复"
+        
+        # 检查变量边界合理性
+        for var in problem.variables:
+            if var.lower_bound > var.upper_bound:
+                return f"变量 {var.name} 的下界大于上界"
+            if var.lower_bound == var.upper_bound and len(problem.constraints_latex) == 0:
+                # 如果所有变量都是固定值且没有约束，问题可能过于简单
+                pass
+        
+        # 如果只有一个变量且没有约束，可能是解析失败
+        if len(problem.variables) == 1 and len(problem.constraints_latex) == 0:
+            var = problem.variables[0]
+            # 检查是否有合理的边界
+            if var.lower_bound == float('-inf') and var.upper_bound == float('inf'):
+                return "问题定义过于简单（可能解析失败）：只有一个无界变量且无约束"
+        
+        return ""
     
     def solve_with_algorithm(
         self,
