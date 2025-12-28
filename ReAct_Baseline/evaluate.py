@@ -107,8 +107,8 @@ def cli():
     # ReAct Agent 参数
     parser.add_argument("--max_react_steps", type=int, default=3,
                        help="Maximum ReAct loop steps (default: 3)")
-    parser.add_argument("--rho_danger", type=float, default=1.0,
-                       help="Rho danger threshold for heuristic strategy (default: 1.0, only call LLM when overloaded)")
+    parser.add_argument("--rho_danger", type=float, default=0.92,
+                       help="Rho danger threshold for heuristic strategy (default: 0.92, call LLM when rho > 92% for preventive action)")
     
     return parser.parse_args()
 
@@ -127,9 +127,9 @@ def evaluate(env,
              llm_base_url=None,
              llm_temperature=0.7,
              llm_max_tokens=4096,
-             # ReAct Agent 参数
-             max_react_steps=3,
-             rho_danger=1.0,
+    # ReAct Agent 参数
+    max_react_steps=3,
+    rho_danger=0.92,  # 修改为 0.92：在过载前进行预防性调度（原值 1.0 太晚）
              **kwargs):
              
     # 创建 LLM 客户端

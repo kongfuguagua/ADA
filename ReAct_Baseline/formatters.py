@@ -68,7 +68,13 @@ class ObservationFormatter:
             lines.append(f"过载线路数: {overflow_count}")
             overflow_lines = self._get_overflow_lines(observation)
             for line_id, rho_val in overflow_lines[:self.max_overflow_lines]:
-                lines.append(f"  - 线路 {line_id}: 负载率 {rho_val:.2%} (过载)")
+                # 获取线路拓扑信息（连接的变电站）
+                line_topo_info = ""
+                if hasattr(observation, 'line_or_to_subid') and hasattr(observation, 'line_ex_to_subid'):
+                    or_sub_id = int(observation.line_or_to_subid[line_id])
+                    ex_sub_id = int(observation.line_ex_to_subid[line_id])
+                    line_topo_info = f" (变电站 {or_sub_id} <-> {ex_sub_id})"
+                lines.append(f"  - 线路 {line_id}{line_topo_info}: 负载率 {rho_val:.2%} (过载)")
             if len(overflow_lines) > self.max_overflow_lines:
                 lines.append(f"  ... 还有 {len(overflow_lines) - self.max_overflow_lines} 条过载线路")
             lines.append("")
@@ -111,7 +117,24 @@ class ObservationFormatter:
                     # 计算可调整范围
                     max_increase = gen_pmax - gen_p
                     max_decrease = gen_p - gen_pmin
-                    lines.append(f"  - 发电机 {gen_id}: 当前 {gen_p:.2f} MW (范围: {gen_pmin:.2f} ~ {gen_pmax:.2f} MW, 可增: +{max_increase:.2f} MW, 可减: -{max_decrease:.2f} MW)")
+                    
+                    # 获取爬坡速率限制（关键约束）
+                    ramp_info = ""
+                    if hasattr(observation, 'gen_max_ramp_up') and hasattr(observation, 'gen_max_ramp_down'):
+                        max_ramp_up = float(observation.gen_max_ramp_up[gen_id])
+                        max_ramp_down = float(observation.gen_max_ramp_down[gen_id])
+                        # 实际可调整量受爬坡速率限制
+                        actual_max_increase = min(max_increase, max_ramp_up)
+                        actual_max_decrease = min(max_decrease, max_ramp_down)
+                        ramp_info = f", 爬坡限制: ±{max_ramp_up:.2f} MW/步 (实际可调: +{actual_max_increase:.2f}/-{actual_max_decrease:.2f} MW)"
+                    
+                    # 获取拓扑信息（发电机连接的变电站）
+                    topo_info = ""
+                    if hasattr(observation, 'gen_to_subid'):
+                        gen_sub_id = int(observation.gen_to_subid[gen_id])
+                        topo_info = f" (变电站 {gen_sub_id})"
+                    
+                    lines.append(f"  - 发电机 {gen_id}{topo_info}: 当前 {gen_p:.2f} MW (范围: {gen_pmin:.2f} ~ {gen_pmax:.2f} MW, 可增: +{max_increase:.2f} MW, 可减: -{max_decrease:.2f} MW{ramp_info})")
                 if len(redispatchable_gens) > 5:
                     lines.append(f"  ... 还有 {len(redispatchable_gens) - 5} 个可调度发电机")
                 lines.append("")

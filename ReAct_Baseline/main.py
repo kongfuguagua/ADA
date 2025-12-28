@@ -50,7 +50,7 @@ if __name__ == "__main__":
         verbose=True,
         save_gif=True,  # 如果需要 GIF，设置为 True（需要 l2rpn_baselines）
         max_react_steps=3,  # ReAct 循环最大重试次数
-        rho_danger=1.0,  # 启发式策略：只有超过此阈值（有过载）才调用 LLM
+        rho_danger=0.95,  # 启发式策略：当负载率超过 92% 时调用 LLM（预防性调度，避免等到过载）
         llm_temperature=0.7,
     )
     
