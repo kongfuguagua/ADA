@@ -1,0 +1,135 @@
+# ReAct Baseline Agent
+
+基于 ReAct (Reasoning + Acting) 范式的电网调度智能体，作为与 ADA 智能体的对比 Baseline。
+
+## 文件结构
+
+```
+ReAct_Baseline/
+├── __init__.py          # 模块导出
+├── agent.py             # 核心类 ReActAgent，实现 grid2op.BaseAgent 接口
+├── formatters.py        # Grid2Op Observation -> 文本描述的转换逻辑
+├── parser.py            # 文本指令 -> Grid2Op Action 的解析逻辑
+├── prompts.py           # ReAct 的 System Prompt 和 Few-shot Examples
+└── README.md            # 本文件
+```
+
+## 使用方法
+
+### 方法 1: 使用评估程序（推荐）
+
+```bash
+# 使用命令行参数
+python ReAct_Baseline/evaluate.py \
+    --data_dir l2rpn_case14_sandbox \
+    --nb_episode 7 \
+    --verbose \
+    --llm_api_key your-api-key \
+    --llm_base_url https://api.deepseek.com \
+    --llm_model deepseek-chat \
+    --max_react_steps 3
+```
+
+或者使用 `main.py`：
+
+```bash
+# 需要先配置环境变量
+export CLOUD_API_KEY="your-api-key"
+export CLOUD_BASE_URL="https://api.deepseek.com"
+export CLOUD_MODEL="deepseek-chat"
+
+# 运行
+python ReAct_Baseline/main.py
+```
+
+### 方法 2: 在代码中使用
+
+```python
+from grid2op import make
+from grid2op.Reward import L2RPNReward
+from lightsim2grid import LightSimBackend
+
+from ReAct_Baseline import ReActAgent
+from ADA.utils.llm import OpenAIChat
+
+# 1. 创建环境
+env = make(
+    "l2rpn_case14_sandbox",
+    reward_class=L2RPNReward,
+    backend=LightSimBackend()
+)
+
+# 2. 创建 LLM 客户端
+llm_client = OpenAIChat(
+    model="deepseek-chat",
+    api_key="your-api-key",
+    base_url="https://api.deepseek.com"
+)
+
+# 3. 创建 ReAct Agent
+agent = ReActAgent(
+    action_space=env.action_space,
+    observation_space=env.observation_space,
+    llm_client=llm_client,
+    max_react_steps=3,  # ReAct 循环最大重试次数
+    name="ReActAgent"
+)
+
+# 4. 运行
+obs = env.reset()
+done = False
+while not done:
+    action = agent.act(obs, reward=0.0, done=False)
+    obs, reward, done, info = env.step(action)
+```
+
+## 核心特性
+
+1. **纯 LLM 推理**: 不依赖数学优化求解器，完全依赖 LLM 的推理能力
+2. **ReAct 循环**: 通过 Thought-Action-Observation 循环，让 LLM 根据环境反馈调整策略
+3. **安全验证**: 使用 `observation.simulate()` 验证动作安全性，避免危险操作
+4. **错误反馈**: 如果动作非法或不安全，将错误信息反馈给 LLM，让其重新思考
+
+## 工作流程
+
+1. **Observe**: 获取环境观测，转换为文本描述
+2. **Think**: LLM 分析当前状态，生成思考过程
+3. **Act**: LLM 生成文本动作指令（如 `redispatch(2, 10.5)`）
+4. **Execute**: 
+   - 解析动作为 Grid2Op Action
+   - 在模拟环境中验证动作安全性
+   - 如果安全: 输出该动作
+   - 如果不安全/非法: 生成错误反馈，返回第 2 步
+
+## 支持的动作
+
+- `redispatch(gen_id, amount_mw)`: 调整发电机出力
+- `set_line_status(line_id, status)`: 改变线路状态（+1 开启，-1 关闭）
+- `do_nothing()`: 保持现状
+
+## 配置参数
+
+### Agent 参数
+- `max_react_steps`: ReAct 循环的最大重试次数（默认 3）
+- `llm_client`: LLM 客户端（必须提供 OpenAIChat 实例）
+
+### 评估程序参数
+- `--data_dir`: 环境名称或路径（必需）
+- `--nb_episode`: 评估的 episode 数量（默认 1）
+- `--max_steps`: 每个 episode 的最大步数（-1 表示不限制，默认 -1）
+- `--logs_dir`: 日志保存路径（默认 `./logs-eval/react-baseline`）
+- `--verbose`: 显示详细输出
+- `--gif`: 保存 GIF 可视化（需要 l2rpn_baselines）
+- `--llm_model`: LLM 模型名称（默认从环境变量 `CLOUD_MODEL` 读取）
+- `--llm_api_key`: LLM API Key（默认从环境变量 `CLOUD_API_KEY` 读取）
+- `--llm_base_url`: LLM Base URL（默认从环境变量 `CLOUD_BASE_URL` 读取）
+- `--llm_temperature`: LLM 温度参数（默认 0.7）
+- `--max_react_steps`: ReAct 循环最大重试次数（默认 3）
+
+## 注意事项
+
+- 需要配置 LLM API Key（通过环境变量或命令行参数）
+- 动作解析使用正则表达式，要求 LLM 严格按照格式输出
+- 如果多次重试后仍无法找到安全动作，会返回 `do_nothing()`
+- 评估程序会自动统计 Agent 的性能指标（成功率、平均 ReAct 循环次数等）
+
