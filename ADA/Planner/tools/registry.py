@@ -560,6 +560,268 @@ class LoadTrendAnalysisTool(BaseTool):
         }
 
 
+class EnvironmentFeatureAnalysisTool(BaseTool):
+    """环境特征分析工具（提取环境配置和结构信息）"""
+    
+    def __init__(self, env=None):
+        self._env = env
+    
+    def set_env(self, env):
+        self._env = env
+    
+    @property
+    def name(self) -> str:
+        return "environment_feature_analysis"
+    
+    @property
+    def description(self) -> str:
+        return "分析环境特征，提供电网规模、决策变量维度、约束范围等结构化信息，用于指导问题建模"
+    
+    def execute(self, **kwargs) -> Dict[str, Any]:
+        """分析环境特征"""
+        try:
+            # 从环境配置获取信息
+            env_config_info = self._get_env_config_info()
+            
+            # 从实际环境对象获取信息
+            env_structure_info = self._get_env_structure_info()
+            
+            # 合并信息
+            return {
+                "environment_config": env_config_info,
+                "grid_structure": env_structure_info,
+                "decision_space": self._analyze_decision_space(),
+                "constraint_summary": self._analyze_constraints(),
+            }
+        except Exception as e:
+            logger.warning(f"环境特征分析失败: {e}")
+            return self._default_features()
+    
+    def _get_env_config_info(self) -> Dict[str, Any]:
+        """从env/config.py获取环境配置信息"""
+        try:
+            from env.config import get_env_config, ENV_CONFIGS
+            
+            # 尝试从环境对象获取配置名称
+            env_name = None
+            if self._env is not None:
+                # 尝试从环境属性推断
+                if hasattr(self._env, 'name'):
+                    env_name = self._env.name
+                elif hasattr(self._env, 'env_name'):
+                    env_name = self._env.env_name
+            
+            # 如果无法确定，返回通用信息
+            if env_name is None:
+                return {
+                    "competition": "unknown",
+                    "has_storage": False,
+                    "has_renewable": False,
+                    "has_curtailment": False,
+                    "has_redispatch": True,
+                    "has_alarm": False,
+                    "description": "环境配置信息不可用"
+                }
+            
+            # 尝试匹配配置
+            for config_name, config in ENV_CONFIGS.items():
+                if config.env_name == env_name or config_name in str(env_name):
+                    return {
+                        "competition": config.competition.value,
+                        "name": config.name,
+                        "has_storage": config.has_storage,
+                        "has_renewable": config.has_renewable,
+                        "has_curtailment": config.has_curtailment,
+                        "has_redispatch": config.has_redispatch,
+                        "has_alarm": config.has_alarm,
+                        "description": config.description
+                    }
+            
+            return {
+                "competition": "unknown",
+                "has_storage": False,
+                "has_renewable": False,
+                "has_curtailment": False,
+                "has_redispatch": True,
+                "has_alarm": False,
+                "description": f"环境: {env_name}"
+            }
+        except Exception as e:
+            logger.warning(f"获取环境配置失败: {e}")
+            return {
+                "competition": "unknown",
+                "has_storage": False,
+                "has_renewable": False,
+                "has_curtailment": False,
+                "has_redispatch": True,
+                "has_alarm": False,
+                "description": "环境配置信息不可用"
+            }
+    
+    def _get_env_structure_info(self) -> Dict[str, Any]:
+        """从实际环境对象获取电网结构信息"""
+        if self._env is None or not hasattr(self._env, 'current_obs') or self._env.current_obs is None:
+            return {
+                "n_generators": "unknown",
+                "n_loads": "unknown",
+                "n_lines": "unknown",
+                "n_substations": "unknown",
+                "note": "环境对象不可用，使用默认值"
+            }
+        
+        try:
+            obs = self._env.current_obs
+            
+            return {
+                "n_generators": int(obs.n_gen) if hasattr(obs, 'n_gen') else "unknown",
+                "n_loads": int(obs.n_load) if hasattr(obs, 'n_load') else "unknown",
+                "n_lines": int(obs.n_line) if hasattr(obs, 'n_line') else "unknown",
+                "n_substations": int(obs.n_sub) if hasattr(obs, 'n_sub') else "unknown",
+                "generator_info": {
+                    "gen_pmin": [float(x) for x in obs.gen_pmin] if hasattr(obs, 'gen_pmin') else [],
+                    "gen_pmax": [float(x) for x in obs.gen_pmax] if hasattr(obs, 'gen_pmax') else [],
+                    "gen_cost_per_mw": [float(x) for x in obs.gen_cost_per_MW] if hasattr(obs, 'gen_cost_per_MW') else [],
+                } if hasattr(obs, 'gen_pmin') else {},
+                "load_info": {
+                    "current_load": [float(x) for x in obs.load_p] if hasattr(obs, 'load_p') else [],
+                } if hasattr(obs, 'load_p') else {},
+            }
+        except Exception as e:
+            logger.warning(f"获取环境结构信息失败: {e}")
+            return {
+                "n_generators": "unknown",
+                "n_loads": "unknown",
+                "n_lines": "unknown",
+                "n_substations": "unknown",
+                "note": f"获取失败: {str(e)}"
+            }
+    
+    def _analyze_decision_space(self) -> Dict[str, Any]:
+        """分析决策空间"""
+        structure = self._get_env_structure_info()
+        n_gen = structure.get("n_generators", 0)
+        
+        if isinstance(n_gen, int) and n_gen > 0:
+            return {
+                "primary_variables": {
+                    "generator_power": {
+                        "dimension": n_gen,
+                        "description": "发电机出力向量，维度等于发电机数量",
+                        "typical_range": "每个发电机的出力上下限由gen_pmin和gen_pmax决定",
+                        "constraint_type": "box_constraint"
+                    }
+                },
+                "optional_variables": {
+                    "redispatch_delta": {
+                        "dimension": n_gen,
+                        "description": "再调度调整量（如果支持再调度）",
+                        "typical_range": "通常限制在[-30, 50] MW范围内",
+                        "constraint_type": "box_constraint"
+                    }
+                },
+                "variable_count_estimate": n_gen,
+                "note": "主要决策变量是发电机出力，必须满足功率平衡和线路容量约束"
+            }
+        else:
+            return {
+                "primary_variables": {
+                    "generator_power": {
+                        "dimension": "unknown",
+                        "description": "发电机出力向量",
+                        "typical_range": "由环境决定",
+                        "constraint_type": "box_constraint"
+                    }
+                },
+                "variable_count_estimate": "unknown",
+                "note": "环境信息不可用，需要从其他工具获取"
+            }
+    
+    def _analyze_constraints(self) -> Dict[str, Any]:
+        """分析约束条件"""
+        structure = self._get_env_structure_info()
+        n_gen = structure.get("n_generators", 0)
+        n_load = structure.get("n_loads", 0)
+        n_line = structure.get("n_lines", 0)
+        
+        constraints = {
+            "power_balance": {
+                "type": "equality",
+                "description": "功率平衡约束：总发电量 = 总负载",
+                "formula": "sum(p_i) = sum(load_k)",
+                "complexity": "linear"
+            },
+            "generator_limits": {
+                "type": "inequality",
+                "description": "发电机出力上下限约束",
+                "formula": "p_min[i] <= p[i] <= p_max[i]",
+                "complexity": "linear",
+                "count": n_gen if isinstance(n_gen, int) else "unknown"
+            },
+            "line_loading": {
+                "type": "inequality",
+                "description": "线路负载率约束：rho_j <= 1.0",
+                "formula": "rho_j = f_j / S_j <= 1.0",
+                "complexity": "nonlinear",
+                "count": n_line if isinstance(n_line, int) else "unknown"
+            }
+        }
+        
+        return {
+            "constraint_types": constraints,
+            "total_constraint_count_estimate": (
+                (1 + n_gen + n_line) 
+                if isinstance(n_gen, int) and isinstance(n_line, int) 
+                else "unknown"
+            ),
+            "constraint_complexity": "混合（线性+非线性）",
+            "note": "必须包含功率平衡、发电机边界和线路容量约束"
+        }
+    
+    def _default_features(self) -> Dict[str, Any]:
+        """默认环境特征（当无法获取真实信息时）"""
+        return {
+            "environment_config": {
+                "competition": "unknown",
+                "has_storage": False,
+                "has_renewable": False,
+                "has_curtailment": False,
+                "has_redispatch": True,
+                "has_alarm": False,
+                "description": "默认配置"
+            },
+            "grid_structure": {
+                "n_generators": "unknown",
+                "n_loads": "unknown",
+                "n_lines": "unknown",
+                "note": "使用默认值，建议调用其他工具获取详细信息"
+            },
+            "decision_space": {
+                "primary_variables": {
+                    "generator_power": {
+                        "dimension": "unknown",
+                        "description": "发电机出力向量",
+                        "typical_range": "由环境决定"
+                    }
+                }
+            },
+            "constraint_summary": {
+                "constraint_types": {
+                    "power_balance": {"type": "equality", "description": "功率平衡"},
+                    "generator_limits": {"type": "inequality", "description": "发电机边界"},
+                    "line_loading": {"type": "inequality", "description": "线路容量"}
+                }
+            }
+        }
+    
+    @property
+    def schema(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": {"type": "object", "properties": {}, "required": []}
+        }
+
+
 def create_default_registry(env=None) -> ToolRegistry:
     """
     创建包含默认工具的注册表
@@ -576,6 +838,7 @@ def create_default_registry(env=None) -> ToolRegistry:
     registry.register(FinishTool())
     
     # 注册分析工具
+    registry.register(EnvironmentFeatureAnalysisTool(env))  # 新增：环境特征分析
     registry.register(GridStatusAnalysisTool(env))
     registry.register(OverflowRiskAnalysisTool(env))
     registry.register(GeneratorCapacityAnalysisTool(env))

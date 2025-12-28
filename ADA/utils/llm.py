@@ -142,6 +142,17 @@ class OpenAIChat(BaseLLM):
             api_key=self.api_key,
             base_url=self.base_url
         )
+        
+        # 检测是否是需要处理 enable_thinking 的模型
+        self._needs_thinking_fix = self._is_thinking_model(self.model)
+    
+    def _is_thinking_model(self, model_name: str) -> bool:
+        """检测是否是支持深度思考的模型（需要特殊处理）"""
+        if not model_name:
+            return False
+        model_lower = model_name.lower()
+        # 检测 qwen3 系列或其他支持 thinking 的模型
+        return "qwen3" in model_lower or "qwen" in model_lower
     
     def _build_messages(
         self, 
@@ -171,12 +182,19 @@ class OpenAIChat(BaseLLM):
         """对话接口"""
         messages = self._build_messages(prompt, history, system_prompt)
         
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens
-        )
+        # 构建请求参数
+        request_params = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens
+        }
+        
+        # 对于支持深度思考的模型，在非流式调用时必须设置 enable_thinking=False
+        if self._needs_thinking_fix:
+            request_params["extra_body"] = {"enable_thinking": False}
+        
+        response = self.client.chat.completions.create(**request_params)
         return response.choices[0].message.content
     
     def generate_structured(
@@ -203,13 +221,20 @@ class OpenAIChat(BaseLLM):
         
         messages = self._build_messages(structured_prompt, history, system_prompt)
         
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            temperature=0.3,  # 结构化输出使用较低温度
-            max_tokens=self.max_tokens,
-            response_format={"type": "json_object"}
-        )
+        # 构建请求参数
+        request_params = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": 0.3,  # 结构化输出使用较低温度
+            "max_tokens": self.max_tokens,
+            "response_format": {"type": "json_object"}
+        }
+        
+        # 对于支持深度思考的模型，在非流式调用时必须设置 enable_thinking=False
+        if self._needs_thinking_fix:
+            request_params["extra_body"] = {"enable_thinking": False}
+        
+        response = self.client.chat.completions.create(**request_params)
         
         content = response.choices[0].message.content
         data = json.loads(content)
@@ -225,14 +250,21 @@ class OpenAIChat(BaseLLM):
         """带工具调用的对话"""
         messages = self._build_messages(prompt, history, system_prompt)
         
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            tools=tools,
-            tool_choice="auto",
-            temperature=self.temperature,
-            max_tokens=self.max_tokens
-        )
+        # 构建请求参数
+        request_params = {
+            "model": self.model,
+            "messages": messages,
+            "tools": tools,
+            "tool_choice": "auto",
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens
+        }
+        
+        # 对于支持深度思考的模型，在非流式调用时必须设置 enable_thinking=False
+        if self._needs_thinking_fix:
+            request_params["extra_body"] = {"enable_thinking": False}
+        
+        response = self.client.chat.completions.create(**request_params)
         
         message = response.choices[0].message
         

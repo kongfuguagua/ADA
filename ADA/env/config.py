@@ -35,8 +35,7 @@ class EnvConfig:
         env_name: Grid2Op 环境标识符（用于 grid2op.make()）
         competition: 所属比赛
         description: 环境描述
-        use_lightsim: 是否使用 LightSim2Grid 后端（更快）
-        action_class: 动作空间类名称
+        action_class: 动作空间类名称（可选，grid2op 会自动选择）
         has_storage: 是否有储能单元
         has_renewable: 是否有可再生能源发电机
         has_curtailment: 是否支持弃风操作
@@ -50,11 +49,10 @@ class EnvConfig:
     competition: Competition
     description: str = ""
     
-    # 后端配置
-    use_lightsim: bool = True
+    # 动作空间配置（可选）
     action_class: Optional[str] = None
     
-    # 功能标志
+    # 功能标志（用于标识环境能力，不影响环境创建）
     has_storage: bool = False
     has_renewable: bool = False
     has_curtailment: bool = False
@@ -75,6 +73,9 @@ class EnvConfig:
             包含环境创建参数的字典
         """
         params = {"dataset": self.env_name}
+        # action_class 通过 extra_params 传递（如果需要）
+        if self.action_class:
+            params["action_class"] = self.action_class
         if self.extra_params:
             params.update(self.extra_params)
         return params
@@ -88,7 +89,6 @@ NEURIPS_2020_TRACK1 = EnvConfig(
     env_name="l2rpn_neurips_2020_track1_small",
     competition=Competition.NEURIPS_2020_TRACK1,
     description="鲁棒性赛道：开发能够应对突发事件的智能体。对抗性对手每天随机攻击电网线路。",
-    use_lightsim=True,
     action_class="TopologyAndDispatchAction",
     has_storage=False,
     has_renewable=False,
@@ -103,7 +103,6 @@ NEURIPS_2020_TRACK2 = EnvConfig(
     env_name="l2rpn_neurips_2020_track2_small",
     competition=Competition.NEURIPS_2020_TRACK2,
     description="适应性赛道：开发能够适应新能源生产的智能体。重点关注可再生能源比例增加。",
-    use_lightsim=True,
     action_class="TopologyAndDispatchAction",
     has_storage=False,
     has_renewable=True,
@@ -119,7 +118,6 @@ ICAPS_2021 = EnvConfig(
     env_name="l2rpn_icaps_2021_small",
     competition=Competition.ICAPS_2021,
     description="L2RPN 信任赛道：关注电网运营中可信赖的人工智能。引入告警机制，实现人机协作。",
-    use_lightsim=True,
     action_class="TopologyAndDispatchAction",
     has_storage=False,
     has_renewable=True,
@@ -134,7 +132,6 @@ WCCI_2022 = EnvConfig(
     env_name="l2rpn_wcci_2022",
     competition=Competition.WCCI_2022,
     description="未来能源与碳中和赛道。引入储能单元和弃风功能，用于可再生能源管理。",
-    use_lightsim=True,
     action_class=None,  # 使用默认的 PlayableAction
     has_storage=True,
     has_renewable=True,
@@ -149,7 +146,6 @@ SANDBOX_CASE14 = EnvConfig(
     env_name="l2rpn_case14_sandbox",
     competition=Competition.SANDBOX,
     description="用于开发和测试的小型沙盒环境。基于 IEEE 14 节点系统。",
-    use_lightsim=True,
     has_storage=False,
     has_renewable=False,
     has_curtailment=False,
@@ -215,7 +211,7 @@ def print_config_info(config: EnvConfig) -> None:
     print(f"  - 弃风功能: {'是' if config.has_curtailment else '否'}")
     print(f"  - 再调度: {'是' if config.has_redispatch else '否'}")
     print(f"  - 告警系统: {'是' if config.has_alarm else '否'}")
-    print(f"\n后端: {'LightSim2Grid（快速）' if config.use_lightsim else 'PandaPower'}")
+    print(f"\n后端: 自动选择（优先 LightSim2Grid）")
     if config.max_episode_steps:
         print(f"最大回合步数: {config.max_episode_steps}")
     print(f"{'='*60}\n")

@@ -131,7 +131,7 @@ class OptimizationProblem(BaseModel):
     
     # 结构化定义
     variables: List[VariableDefinition] = Field(default_factory=list)
-    parameters: Dict[str, float] = Field(default_factory=dict)  # 常数项
+    parameters: Dict[str, Any] = Field(default_factory=dict)  # 常数项（支持标量、向量、矩阵等）
     
     # 元信息
     is_minimization: bool = True  # 是否为最小化问题

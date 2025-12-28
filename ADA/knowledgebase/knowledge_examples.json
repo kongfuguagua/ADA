@@ -1,0 +1,93 @@
+[
+  {
+    "id": "tk_overload_detection",
+    "type": "task_knowledge",
+    "title": "过载线路检测与优先级排序",
+    "content": "# 过载线路检测与优先级排序\n\n## 问题描述\n当电网出现多条线路过载时，需要识别最关键的过载线路并优先处理。\n\n## 关键特征\n- 线路负载率 (rho) > 1.0 表示过载\n- 需要考虑 `timestep_overflow`（剩余允许过载时间步数）\n- 临界过载（`timestep_overflow == NB_TIMESTEP_OVERFLOW_ALLOWED`）需要立即处理\n\n## 解决方案\n1. 按负载率降序排序所有过载线路\n2. 将临界过载线路（`timestep_overflow == max`）排在前面\n3. 优先处理临界过载线路\n\n## 参考案例\n- ExpertAgent.getRankedOverloads(): 实现过载排序逻辑\n- 优先级：临界过载 > 非临界过载\n\n## 元数据\n- 来源: ExpertAgent\n- 成功率: 0.90\n- 适用场景: 多线路过载情况",
+    "metadata": {
+      "source": "ExpertAgent",
+      "success_rate": 0.90,
+      "scenarios": ["多线路过载"],
+      "tags": ["过载检测", "优先级排序"],
+      "grid_type": "all",
+      "created_at": "2024-01-01T00:00:00",
+      "updated_at": "2024-01-01T00:00:00"
+    }
+  },
+  {
+    "id": "tk_safety_judgment",
+    "type": "task_knowledge",
+    "title": "电网安全状态判断",
+    "content": "# 电网安全状态判断\n\n## 问题描述\n根据线路负载率判断电网当前状态，决定采用何种策略。\n\n## 关键特征\n- `max_rho < 0.85`: 安全状态（Safe Grid）\n- `max_rho > 0.95`: 危险状态（Unsafe Grid）\n- `0.85 <= max_rho <= 0.95`: 中间状态（Intermediate）\n\n## 解决方案\n- **安全状态**：尝试恢复参考状态（取消再调度、恢复储能目标、重连线路）\n- **危险状态**：启动优化求解，最小化过载\n- **中间状态**：保持当前状态，避免振荡\n\n## 参考案例\n- OptimCVXPY.act(): 根据 rho_danger 和 rho_safe 阈值判断\n- 安全模式：compute_optimum_safe()\n- 危险模式：compute_optimum_unsafe()",
+    "metadata": {
+      "source": "OptimCVXPY",
+      "success_rate": 0.85,
+      "scenarios": ["状态判断"],
+      "tags": ["状态判断", "启发式"],
+      "grid_type": "all",
+      "created_at": "2024-01-01T00:00:00",
+      "updated_at": "2024-01-01T00:00:00"
+    }
+  },
+  {
+    "id": "ak_topology_operation",
+    "type": "action_knowledge",
+    "title": "变电站拓扑操作策略",
+    "content": "# 变电站拓扑操作策略\n\n## 问题描述\n当检测到过载时，通过改变变电站拓扑来缓解过载。\n\n## 关键特征\n- 识别过载线路相关的变电站\n- 评估不同拓扑配置的效果\n- 优先选择能解决所有过载的拓扑（score=4）\n\n## 解决方案\n1. 识别过载线路及其相关变电站\n2. 生成候选拓扑配置（参考拓扑、分割拓扑）\n3. 模拟评估每个配置的效果\n4. 选择最佳配置（优先级：score=4 > score=3 > score=1）\n\n## 参考案例\n- ExpertAgent.act(): 拓扑操作主流程\n- expert_operator(): 拓扑评估和排序\n- 评分标准：4=解决所有过载，3=解决目标过载，1=部分解决",
+    "metadata": {
+      "source": "ExpertAgent",
+      "success_rate": 0.75,
+      "scenarios": ["过载缓解", "拓扑优化"],
+      "tags": ["拓扑操作", "过载缓解"],
+      "grid_type": "all",
+      "created_at": "2024-01-01T00:00:00",
+      "updated_at": "2024-01-01T00:00:00"
+    }
+  },
+  {
+    "id": "ak_redispatch_strategy",
+    "type": "action_knowledge",
+    "title": "发电机再调度策略",
+    "content": "# 发电机再调度策略\n\n## 问题描述\n通过调整发电机出力来缓解过载或恢复参考状态。\n\n## 关键特征\n- 危险状态：最小化过载，允许再调度\n- 安全状态：恢复参考状态（再调度量趋于0）\n- 考虑发电机爬坡限制（ramp_up/ramp_down）\n\n## 解决方案\n1. **危险状态**：\n   - 目标：最小化过载\n   - 允许再调度，但惩罚再调度量（penalty_redispatching_unsafe=0.03）\n   \n2. **安全状态**：\n   - 目标：恢复参考状态（target_dispatch=0）\n   - 惩罚再调度偏差（weight_redisp_target=1.0）\n\n## 参考案例\n- OptimCVXPY.compute_optimum_unsafe(): 危险状态再调度\n- OptimCVXPY.compute_optimum_safe(): 安全状态再调度\n- 再调度分配：按发电机可用容量比例分配",
+    "metadata": {
+      "source": "OptimCVXPY",
+      "success_rate": 0.80,
+      "scenarios": ["过载缓解", "参考状态恢复"],
+      "tags": ["再调度", "优化"],
+      "grid_type": "all",
+      "created_at": "2024-01-01T00:00:00",
+      "updated_at": "2024-01-01T00:00:00"
+    }
+  },
+  {
+    "id": "ak_storage_management",
+    "type": "action_knowledge",
+    "title": "储能单元管理策略",
+    "content": "# 储能单元管理策略\n\n## 问题描述\n管理储能单元的充放电，以缓解过载或维持目标状态。\n\n## 关键特征\n- 危险状态：允许充放电以缓解过载\n- 安全状态：维持目标状态（0.5 * Emax）\n- 考虑能量限制（当前电量、最大容量）\n\n## 解决方案\n1. **危险状态**：\n   - 目标：最小化过载\n   - 允许储能操作，但惩罚储能功率（penalty_storage_unsafe=0.3）\n   \n2. **安全状态**：\n   - 目标：维持目标状态（0.5 * Emax）\n   - 惩罚状态偏差（weight_storage_target=1.0）\n\n## 参考案例\n- OptimCVXPY._add_storage_const(): 储能约束计算\n- 储能限制：考虑功率限制和能量限制",
+    "metadata": {
+      "source": "OptimCVXPY",
+      "success_rate": 0.75,
+      "scenarios": ["储能管理", "过载缓解"],
+      "tags": ["储能", "优化"],
+      "grid_type": "wcci_2022",
+      "created_at": "2024-01-01T00:00:00",
+      "updated_at": "2024-01-01T00:00:00"
+    }
+  },
+  {
+    "id": "ak_line_reconnection",
+    "type": "action_knowledge",
+    "title": "断开线路重连策略",
+    "content": "# 断开线路重连策略\n\n## 问题描述\n在电网安全时，尝试重连因维护或攻击而断开的线路。\n\n## 关键特征\n- 仅在电网安全时执行（`max_rho < 0.95`）\n- 检查线路冷却时间（`time_before_cooldown_line == 0`）\n- 模拟重连后的安全性（`rho < 0.95`）\n\n## 解决方案\n1. 识别断开且可重连的线路（`line_status == False` 且 `cooldown == 0`）\n2. 模拟重连后的状态\n3. 如果安全（`max_rho < 0.95`），执行重连\n\n## 参考案例\n- ExpertAgent.reco_line(): 线路重连逻辑\n- 仅在安全状态执行，避免引入新的过载",
+    "metadata": {
+      "source": "ExpertAgent",
+      "success_rate": 0.90,
+      "scenarios": ["电网恢复", "线路维护后"],
+      "tags": ["线路重连", "安全操作"],
+      "grid_type": "all",
+      "created_at": "2024-01-01T00:00:00",
+      "updated_at": "2024-01-01T00:00:00"
+    }
+  }
+]
+
