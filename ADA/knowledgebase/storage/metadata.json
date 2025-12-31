@@ -910,5 +910,13 @@
     "rho_max_after": 0.9496946930885315,
     "is_safe": true,
     "action_description": "危险模式优化：最小化过载 (max_rho=0.951)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 49.55381393432617,
+    "rho_max_before": 0.8993381261825562,
+    "rho_max_after": 0.8924617767333984,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.899)"
   }
 ]

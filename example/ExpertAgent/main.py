@@ -8,12 +8,23 @@
 
 import grid2op
 from evaluate import evaluate
+from grid2op.Reward import RedispReward, BridgeReward, CloseToOverflowReward, DistanceReward
+from lightsim2grid import LightSimBackend
 
 # Example usage
 if __name__ == "__main__":
-    # Create environment
-    env = grid2op.make("l2rpn_case14_sandbox")
-    
+
+    # 使用标准环境名称
+    env = grid2op.make(
+        "l2rpn_case14_sandbox",
+        reward_class=RedispReward,
+        backend=LightSimBackend(),
+        other_rewards={
+            "bridge": BridgeReward,
+            "overflow": CloseToOverflowReward,
+            "distance": DistanceReward
+        }
+    )
     # Evaluate agent
     res = evaluate(env, nb_episode=7, verbose=True, save_gif=True, grid="IEEE14")
 
