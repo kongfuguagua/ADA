@@ -72,8 +72,13 @@ class OptimizationService:
         if env.n_storage > 0 and not env.action_space.supports_type("set_storage"):
             raise RuntimeError("环境不支持储能操作，但电网中有储能单元")
         
-        if np.any(env.gen_renewable) and not env.action_space.supports_type("curtail"):
-            raise RuntimeError("环境不支持切负荷操作，但电网中有可再生能源")
+        # 修改：不再报错，而是记录一个 flag
+        self.supports_curtailment = env.action_space.supports_type("curtail")
+        if np.any(env.gen_renewable) and not self.supports_curtailment:
+            # 警告将在 logger 初始化后输出
+            self._curtailment_warning_needed = True
+        else:
+            self._curtailment_warning_needed = False
         
         if not env.action_space.supports_type("redispatch"):
             raise RuntimeError("环境必须支持再调度操作")
@@ -200,6 +205,10 @@ class OptimizationService:
         
         # 日志
         self.logger = logger
+        
+        # 输出削减相关的警告（在 logger 初始化之后）
+        if self._curtailment_warning_needed:
+            self.logger.warning("环境包含可再生能源但不支持削减操作。削减优化将被禁用。")
         
         # 潮流计算结果
         self.flow_computed = np.zeros(env.n_line, dtype=float)
@@ -419,7 +428,13 @@ class OptimizationService:
             self._add_redisp_const(obs, bus_id)
             mask_ = (self.bus_gen.value == bus_id) & obs.gen_renewable
             self.curtail_down.value[bus_id] = 0.
-            self.curtail_up.value[bus_id] = tmp_[mask_].sum()
+            
+            # 修改：如果不支持削减，强制上限为 0
+            if self.supports_curtailment:
+                self.curtail_up.value[bus_id] = tmp_[mask_].sum()
+            else:
+                self.curtail_up.value[bus_id] = 0.
+            
             self._add_storage_const(obs, bus_id)
         self._remove_margin_rounding()
     
@@ -598,7 +613,8 @@ class OptimizationService:
             act.storage_p = storage_
         
         # 切负荷
-        if np.any(np.abs(curtailment) > 0.):
+        # 修改：只有在支持削减时才处理削减动作
+        if self.supports_curtailment and np.any(np.abs(curtailment) > 0.):
             curtailment_mw = np.zeros(shape=act.n_gen) - 1.
             gen_curt = obs.gen_renewable & (obs.gen_p > 0.1)
             idx_gen = self.bus_gen.value[gen_curt].astype(int)

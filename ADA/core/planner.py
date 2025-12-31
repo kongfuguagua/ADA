@@ -65,18 +65,18 @@ class Planner:
             # 找到了解决过载的方案
             action = expert_result["action"]
             
-            # === 关键：状态更新 ===
-            # ExpertAgent 在决定动作时更新 sub_2nodes
-            # 如果是切分变电站 (sub_id_to_split != -1)
+            # === 关键：状态更新（与 ExpertAgent 完全一致）===
+            # 1. 如果是切分变电站 (sub_id_to_split != -1)
             sub_split = expert_result.get("sub_id_to_split", -1)
             if sub_split != -1:
                 self.sub_2nodes.add(int(sub_split))
                 logger.info(f"Planner: Action implies splitting Substation {sub_split}")
-                
-            # 注意：恢复操作(Merge)的状态清理通常在执行后或下一次观测确认后
-            # 但为了保持一致性，如果 ExpertService 返回了恢复动作，它内部逻辑通常会涉及 sub_2nodes 的处理
-            # 简单起见，我们依赖 Observation 的反馈来清理 sub_2nodes (在 reset 或下一帧检测)
-            # 或者这里暂不主动 discard，除非 ExpertResult 明确指示
+            
+            # 2. 如果是恢复操作（从兜底逻辑返回的恢复动作）
+            sub_id_to_discard = expert_result.get("sub_id_to_discard", None)
+            if sub_id_to_discard is not None:
+                self.sub_2nodes.discard(sub_id_to_discard)
+                logger.info(f"Planner: Action implies merging Substation {sub_id_to_discard}")
             
             candidates.append(CandidateAction(
                 source="Expert_Replica",
@@ -88,13 +88,12 @@ class Planner:
 
         # 2. 如果无过载，尝试恢复或重连
         # 恢复拓扑
-        recovery_action = self._expert_service.check_recovery(observation, self.sub_2nodes)
-        if recovery_action:
-            # 假设恢复动作执行成功，我们需要从 sub_2nodes 中移除
-            # 但这里只是 Suggest，真正的移除应该在观察到恢复后。
-            # 不过 ExpertAgent 是在 act() 里直接 discard 的。我们这里模拟这种行为。
-            # 为了防止反复 suggest 同一个恢复，我们需要确保它有效。
-            # 这里的移除只是 Planner 内部状态的预测更新，如果动作失败，可能需要机制加回来（暂忽略）
+        recovery_action, recovery_sub_id = self._expert_service.check_recovery(observation, self.sub_2nodes)
+        if recovery_action is not None:
+            # ExpertAgent 逻辑：恢复成功时立即更新状态
+            if recovery_sub_id is not None:
+                self.sub_2nodes.discard(recovery_sub_id)
+                logger.info(f"Planner: Recovery action will merge Substation {recovery_sub_id}")
             candidates.append(CandidateAction(
                 source="Expert_Recovery",
                 action_obj=recovery_action,

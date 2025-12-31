@@ -94,6 +94,13 @@ class Solver:
         self.observation_space = observation_space
         self.env = env
         
+        # 修改：检查环境是否支持削减操作
+        self.supports_curtailment = action_space.supports_type("curtail")
+        if env is not None and np.any(env.gen_renewable) and not self.supports_curtailment:
+            self._curtailment_warning_needed = True
+        else:
+            self._curtailment_warning_needed = False
+        
         # 参数
         self.margin_th_limit = cp.Parameter(value=margin_th_limit, nonneg=True)
         self.alpha_por_error = cp.Parameter(value=alpha_por_error, nonneg=True)
@@ -211,6 +218,10 @@ class Solver:
         self.flow_computed = np.zeros(observation_space.n_line, dtype=float)
         self.flow_computed[:] = np.nan
         
+        # 输出削减相关的警告（在 logger 初始化之后）
+        if self._curtailment_warning_needed:
+            logger.warning("环境包含可再生能源但不支持削减操作。削减优化将被禁用。")
+        
         logger.info("Solver 初始化完成")
     
     def solve_dispatch(self, observation: BaseObservation) -> List[CandidateAction]:
@@ -327,16 +338,28 @@ class Solver:
         
         tmp_ = obs.load_to_subid
         tmp_[obs.load_bus == 2] += obs.n_sub
+        # 处理断开负载：将 load_bus == -1 的情况设置为 0
+        tmp_[obs.load_bus == -1] = 0
         self.bus_load.value[:] = tmp_.astype(int)
+        # 确保所有值在有效范围内 [0, nb_max_bus-1]
+        self.bus_load.value[:] = np.clip(self.bus_load.value, 0, self.nb_max_bus - 1)
         
         tmp_ = obs.gen_to_subid
         tmp_[obs.gen_bus == 2] += obs.n_sub
+        # 处理断开发电机：将 gen_bus == -1 的情况设置为 0（与线路处理一致）
+        tmp_[obs.gen_bus == -1] = 0
         self.bus_gen.value[:] = tmp_.astype(int)
+        # 确保所有值在有效范围内 [0, nb_max_bus-1]
+        self.bus_gen.value[:] = np.clip(self.bus_gen.value, 0, self.nb_max_bus - 1)
         
         if self.bus_storage is not None:
             tmp_ = obs.storage_to_subid
             tmp_[obs.storage_bus == 2] += obs.n_sub
+            # 处理断开储能：将 storage_bus == -1 的情况设置为 0
+            tmp_[obs.storage_bus == -1] = 0
             self.bus_storage.value[:] = tmp_.astype(int)
+            # 确保所有值在有效范围内 [0, nb_max_bus-1]
+            self.bus_storage.value[:] = np.clip(self.bus_storage.value, 0, self.nb_max_bus - 1)
     
     def _update_th_lim_param(self, obs: BaseObservation) -> None:
         """更新热极限参数"""
@@ -381,7 +404,12 @@ class Solver:
             # 削减约束
             mask_ = (self.bus_gen.value == bus_id) & obs.gen_renewable
             self.curtail_down.value[bus_id] = 0.
-            self.curtail_up.value[bus_id] = tmp_[mask_].sum()
+            
+            # 修改：如果不支持削减，强制上限为 0
+            if self.supports_curtailment:
+                self.curtail_up.value[bus_id] = tmp_[mask_].sum()
+            else:
+                self.curtail_up.value[bus_id] = 0.
             
             # 储能约束
             if self.bus_storage is not None:
@@ -420,7 +448,11 @@ class Solver:
             
             # 削减约束（安全模式下尽量取消削减）
             mask_ = (self.bus_gen.value == bus_id) & obs.gen_renewable
-            self.curtail_down.value[bus_id] = obs.gen_p_before_curtail[mask_].sum() - tmp_[mask_].sum() if hasattr(obs, 'gen_p_before_curtail') else 0.
+            # 修改：如果不支持削减，强制下限为 0
+            if self.supports_curtailment:
+                self.curtail_down.value[bus_id] = obs.gen_p_before_curtail[mask_].sum() - tmp_[mask_].sum() if hasattr(obs, 'gen_p_before_curtail') else 0.
+            else:
+                self.curtail_down.value[bus_id] = 0.
             self.curtail_up.value[bus_id] = 0.
             
             # 历史状态
@@ -643,11 +675,14 @@ class Solver:
             act.storage_p = storage_
         
         # 削减（简化实现）
-        if np.any(np.abs(curtailment) > 0.) and hasattr(obs, 'gen_renewable'):
+        # 修改：只有在支持削减时才处理削减动作
+        if self.supports_curtailment and np.any(np.abs(curtailment) > 0.) and hasattr(obs, 'gen_renewable'):
             curtailment_mw = np.zeros(shape=obs.n_gen) - 1.
             gen_curt = obs.gen_renewable & (obs.gen_p > 0.1)
             if np.any(gen_curt) and self.bus_gen is not None:
                 idx_gen = self.bus_gen.value[gen_curt].astype(int)
+                # 边界检查：确保索引在有效范围内
+                idx_gen = np.clip(idx_gen, 0, self.nb_max_bus - 1)
                 tmp_ = curtailment[idx_gen]
                 modif_gen_optim = tmp_ != 0.
                 gen_p = 1.0 * obs.gen_p
@@ -670,6 +705,8 @@ class Solver:
             gen_redi = obs.gen_redispatchable
             if np.any(gen_redi) and self.bus_gen is not None:
                 idx_gen = self.bus_gen.value[gen_redi].astype(int)
+                # 边界检查：确保索引在有效范围内
+                idx_gen = np.clip(idx_gen, 0, self.nb_max_bus - 1)
                 tmp_ = redispatching[idx_gen]
                 
                 # 计算比例分配

@@ -5,7 +5,7 @@ Expert Insight Service (专家洞察服务) - ExpertAgent Replica Edition
 完全复刻 ExpertAgent (L2RPN Baselines) 的核心决策逻辑：
 1. 完整的过载处理循环 (Top-3 Overloads)
 2. 严格的评分截断策略 (Score 4 vs Score 3 Critical)
-3. 包含所有兜底机制 (Least Worsened, Reference Topology Fallback, IEEE14 Bonus)
+3. 包含所有兜底机制 (Least Worsened, Reference Topology Fallback)
 """
 
 import logging
@@ -159,43 +159,41 @@ class ExpertInsightService:
         
         # 3. 低分兜底逻辑 (Score <= 1)
         # 如果经过上述循环仍未找到好方案 (Score <= 1)，尝试其他手段
+        sub_id_to_discard_from_fallback = None
         if score_best <= 1:
             fallback_action = None
             subs_expert_results = []
             
-            # 3.1 IEEE14 特殊规则
-            if self.grid_name == "IEEE14":
-                # simulator 此时是最后一次循环的模拟器，可能需要重新关注
-                # ExpertAgent 复用了循环最后的 simulator
-                if 'simulator' in locals():
-                    fallback_action = self._bonus_action_IEEE14(simulator, score_best, efficacy_best, is_critical)
-
-            # 3.2 尝试在过载期间恢复参考拓扑 (Try recovering reference topologies)
-            if fallback_action is None and 'expert_results' in locals() and self._is_valid_result(expert_results):
+            # 3.1 尝试在过载期间恢复参考拓扑 (Try recovering reference topologies)
+            # 与 ExpertAgent 逻辑一致：先尝试专家系统已考虑的变电站
+            if 'expert_results' in locals() and self._is_valid_result(expert_results):
                 subs_expert_results = expert_results["Substation ID"].tolist()
-                fallback_action = self._try_out_reference_topologies(
+                fallback_action, sub_id_to_discard_from_fallback = self._try_out_reference_topologies(
                     simulator, score_best, efficacy_best, is_critical, 
                     sub_2nodes, subs_expert_results, subs_in_cooldown
                 )
 
-            # 3.3 尝试其他已分裂的变电站 (Try other split substations)
+            # 3.2 尝试其他已分裂的变电站 (Try other split substations)
+            # 与 ExpertAgent 逻辑一致：尝试专家系统未考虑的变电站
             if fallback_action is None and 'simulator' in locals():
                 subs_to_try = sub_2nodes - set(subs_expert_results)
-                fallback_action = self._try_out_reference_topologies(
-                    simulator, score_best, efficacy_best, is_critical, 
-                    subs_to_try, [], subs_in_cooldown
-                )
+                if subs_to_try:  # 确保有变电站可尝试
+                    # ExpertAgent 逻辑：传入 subs_to_try 作为要尝试的集合
+                    # 由于函数内部检查 sub_id in subs_expert_system_results，我们需要传入所有要尝试的作为"已考虑"列表
+                    fallback_action, sub_id_to_discard_from_fallback = self._try_out_reference_topologies(
+                        simulator, score_best, efficacy_best, is_critical, 
+                        subs_to_try, list(subs_to_try), subs_in_cooldown
+                    )
 
             if fallback_action is not None:
                 best_solution = fallback_action
                 # 如果是恢复操作，意味着合并节点，所以不需要标记为 Split
-                sub_id_to_split = -1 
-                # 但需要注意，_try_out_reference_topologies 可能返回恢复(action)或新的切分
-                # ExpertAgent 中如果是恢复，subID_ToSplitOn 会被重置
+                sub_id_to_split = -1
+                # sub_id_to_discard_from_fallback 将在返回结果中传递，由 Planner 处理
 
         # 4. 封装结果返回
         if best_solution:
-            return {
+            result = {
                 "status": "DANGER",
                 "action": best_solution,
                 "score": score_best,
@@ -203,11 +201,18 @@ class ExpertInsightService:
                 "sub_id_to_split": sub_id_to_split, # 如果 > -1，Planner 需要将其加入 sub_2nodes
                 "description": f"Expert Action (Score: {score_best})"
             }
+            # 如果是从兜底逻辑返回的恢复动作，传递要移除的变电站ID
+            if sub_id_to_discard_from_fallback is not None:
+                result["sub_id_to_discard"] = sub_id_to_discard_from_fallback
+            return result
             
         return {"status": "DANGER", "action": None, "score": 0}
 
-    def check_recovery(self, observation: BaseObservation, sub_2nodes: Set[int]) -> Optional[BaseAction]:
-        """无过载时的恢复逻辑"""
+    def check_recovery(self, observation: BaseObservation, sub_2nodes: Set[int]) -> Tuple[Optional[BaseAction], Optional[int]]:
+        """
+        无过载时的恢复逻辑
+        返回: (action, sub_id) 如果找到可恢复的变电站，否则 (None, None)
+        """
         for sub_id in list(sub_2nodes): # 使用 list copy 避免迭代时修改
             # 检查是否变电站真的被切分了 (topo_vect 包含 1 和 2)
             topo_vec = observation.state_of(substation_id=sub_id)['topo_vect']
@@ -219,8 +224,8 @@ class ExpertInsightService:
                 # 模拟验证安全性
                 obs_sim, _, _, info = observation.simulate(action, time_step=0)
                 if np.all(obs_sim.rho < self.threshold_powerFlow_safe) and len(info['exception']) == 0:
-                    return action
-        return None
+                    return action, sub_id
+        return None, None
 
     def check_reconnection(self, observation: BaseObservation) -> Optional[BaseAction]:
         """无过载时的重连逻辑"""
@@ -359,13 +364,20 @@ class ExpertInsightService:
         return best_idx
 
     def _try_out_reference_topologies(self, simulator, current_score, current_efficacy, is_critical, 
-                                      sub_2nodes_all, subs_already_checked, subs_in_cooldown):
-        """尝试恢复参考拓扑作为备选方案"""
+                                      sub_2nodes_set, subs_expert_system_results, subs_in_cooldown):
+        """
+        尝试恢复参考拓扑作为备选方案
+        与 ExpertAgent 逻辑完全一致：
+        - sub_2nodes_set: 要尝试的变电站集合（通常是 self.sub_2nodes）
+        - subs_expert_system_results: 专家系统已考虑的变电站列表（用于过滤）
+        - subs_in_cooldown: 冷却中的变电站列表
+        返回: (action, sub_id_to_discard) 如果找到更好的动作，否则 (None, None)
+        """
         new_combinations = []
-        candidates_subs = []
         
-        for sub_id in sub_2nodes_all:
-            if (sub_id not in subs_already_checked) and (sub_id not in subs_in_cooldown):
+        for sub_id in sub_2nodes_set:
+            # ExpertAgent 逻辑：sub_id 必须在 subs_expert_system_results 中，且不在冷却中
+            if (sub_id in subs_expert_system_results) and (sub_id not in subs_in_cooldown):
                 # 获取参考拓扑向量 (全1)
                 ref_topo = simulator.get_reference_topovec_sub(sub_id)
                 new_combinations.append(pd.DataFrame({
@@ -373,17 +385,20 @@ class ExpertInsightService:
                     "topology": [ref_topo],
                     "node": sub_id
                 }))
-                candidates_subs.append(sub_id)
         
         if not new_combinations:
-            return None
+            return None, None
             
         return self._compute_score_on_new_combinations(
             simulator, new_combinations, current_score, current_efficacy, is_critical, is_line_cut=False
         )
 
     def _compute_score_on_new_combinations(self, simulator, combinations, best_score, best_eff, is_critical, is_line_cut):
-        """评估新生成的组合"""
+        """
+        评估新生成的组合
+        返回: (action, sub_id_to_discard) 如果找到更好的动作，否则 (None, None)
+        sub_id_to_discard: 如果不是线路断开操作，返回要移除的变电站ID；否则返回 None
+        """
         expert_results, actions = simulator.compute_new_network_changes(combinations)
         
         if self._is_valid_result(expert_results):
@@ -391,37 +406,27 @@ class ExpertInsightService:
             best_candidates = expert_results[expert_results['Topology simulated score'] == new_best_score]
             idx_best = pd.to_numeric(best_candidates["Efficacity"]).idxmax()
             
+            if np.isnan(idx_best):
+                return None, None
+            
             new_eff = float(expert_results.loc[idx_best, 'Efficacity'])
             
-            # 更新条件
+            # 更新条件（与 ExpertAgent 完全一致）
             improve_score = (new_best_score >= 3)
             improve_critical = (new_best_score == 1) and (new_eff >= best_eff) and is_critical
             improve_general = (new_best_score >= best_score) and (new_eff >= best_eff) and (not is_line_cut)
             
             if improve_score or improve_critical or improve_general:
-                return actions[idx_best]
+                action = actions[idx_best]
+                # 如果不是线路断开操作，返回要移除的变电站ID（与 ExpertAgent 逻辑一致）
+                if is_line_cut:
+                    sub_id_to_discard = None
+                else:
+                    sub_id_to_discard = int(expert_results.loc[idx_best, 'Substation ID'])
+                return action, sub_id_to_discard
                 
-        return None
+        return None, None
 
-    def _bonus_action_IEEE14(self, simulator, best_score, best_eff, is_critical):
-        """IEEE14 奖励动作：断开线路 14"""
-        l = 14
-        if simulator.obs.line_status[l]:
-            # 构造 disconnect 组合
-            sub_id = simulator.obs.line_or_to_subid[l]
-            combinations = [pd.DataFrame({
-                "score": 1,
-                "topology": [[l]], # List of lines to cut
-                "node": sub_id # Dummy node
-            })]
-            # 注意：simulator.compute_new_network_changes 对 disconnect 的处理可能需要特定的输入格式
-            # ExpertAgent 中 try_out_overload_disconnections 使用了特定的逻辑
-            # 这里简化处理，若 alphaDeesp 不支持直接传 line list，则此方法可能失效。
-            # 假设 alphaDeesp 的 compute_new_network_changes 能处理。
-            return self._compute_score_on_new_combinations(
-                simulator, combinations, best_score, best_eff, is_critical, is_line_cut=True
-            )
-        return None
 
     def _is_valid_result(self, df):
         return (df is not None) and (not df.empty) and (not df["Efficacity"].isnull().all())

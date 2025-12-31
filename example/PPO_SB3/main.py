@@ -18,7 +18,7 @@ if __name__ == "__main__":
     # Create environment
     # 使用标准环境名称
     env = grid2op.make(
-        "l2rpn_case14_sandbox",
+        "l2rpn_wcci_2020",
         reward_class=RedispReward,
         backend=LightSimBackend(),
         other_rewards={

@@ -918,5 +918,557 @@
     "rho_max_after": 0.8924617767333984,
     "is_safe": true,
     "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.899)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 47.298431396484375,
+    "rho_max_before": 0.9902747869491577,
+    "rho_max_after": 0.9833946228027344,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(5, -2.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 48.069786071777344,
+    "rho_max_before": 0.9275096654891968,
+    "rho_max_after": 0.9206560850143433,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.928)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 0.0,
+    "rho_max_before": 0.8619390726089478,
+    "rho_max_after": 0.8595571517944336,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.862)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 49.02900695800781,
+    "rho_max_before": 0.9543343782424927,
+    "rho_max_after": 0.9538066983222961,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(1, -2.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 48.85655975341797,
+    "rho_max_before": 0.8948376774787903,
+    "rho_max_after": 0.8837868571281433,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.895)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 45.749366760253906,
+    "rho_max_before": 0.9641143083572388,
+    "rho_max_after": 0.9626691937446594,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.964)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 48.16990280151367,
+    "rho_max_before": 0.932535707950592,
+    "rho_max_after": 0.9316456317901611,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.933)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 46.537986755371094,
+    "rho_max_before": 0.9520800709724426,
+    "rho_max_after": 0.9514826536178589,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.952)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 46.95191192626953,
+    "rho_max_before": 0.9497256875038147,
+    "rho_max_after": 0.9493657946586609,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.950)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 47.60468292236328,
+    "rho_max_before": 0.9509395956993103,
+    "rho_max_after": 0.9504052996635437,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.951)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 47.96039581298828,
+    "rho_max_before": 0.9275686740875244,
+    "rho_max_after": 0.9206709265708923,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.928)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 0.0,
+    "rho_max_before": 0.9429413080215454,
+    "rho_max_after": Infinity,
+    "is_safe": false,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.943)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 50.1253776550293,
+    "rho_max_before": 0.954364001750946,
+    "rho_max_after": Infinity,
+    "is_safe": false,
+    "action_description": "LLM 融合策略: redispatch(0, 10.5)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 47.72883605957031,
+    "rho_max_before": 0.9332877397537231,
+    "rho_max_after": 0.9263789057731628,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.933)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 0.0,
+    "rho_max_before": 0.9286049008369446,
+    "rho_max_after": 0.9147863984107971,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.929)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 55.107521057128906,
+    "rho_max_before": 0.9509084820747375,
+    "rho_max_after": Infinity,
+    "is_safe": false,
+    "action_description": "LLM 融合策略: redispatch(2, -3.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 0.0,
+    "rho_max_before": 0.9262620210647583,
+    "rho_max_after": 0.9217483997344971,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.926)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 0.0,
+    "rho_max_before": 0.9511294364929199,
+    "rho_max_after": Infinity,
+    "is_safe": false,
+    "action_description": "LLM 融合策略: redispatch(0, 10.5)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 51.603248596191406,
+    "rho_max_before": 0.9138443470001221,
+    "rho_max_after": 0.8852550983428955,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.914)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 0.0,
+    "rho_max_before": 0.9320884943008423,
+    "rho_max_after": Infinity,
+    "is_safe": false,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.932)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 52.33646011352539,
+    "rho_max_before": 0.9583980441093445,
+    "rho_max_after": 0.9539105296134949,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(0, -1.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 54.48732376098633,
+    "rho_max_before": 0.9369548559188843,
+    "rho_max_after": 0.9325067400932312,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.937)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 53.199100494384766,
+    "rho_max_before": 0.9522737264633179,
+    "rho_max_after": 0.9477270245552063,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(1, -2.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": -10.0,
+    "rho_max_before": 0.9244734048843384,
+    "rho_max_after": 0.9244734048843384,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.924)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 54.615882873535156,
+    "rho_max_before": 0.9513105750083923,
+    "rho_max_after": 0.9498618245124817,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.951)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 51.04978561401367,
+    "rho_max_before": 0.9255848526954651,
+    "rho_max_after": 0.9137036204338074,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.926)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 53.933319091796875,
+    "rho_max_before": 0.9563947319984436,
+    "rho_max_after": 0.9526323676109314,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(0, -5.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 52.843284606933594,
+    "rho_max_before": 0.9487239122390747,
+    "rho_max_after": 0.9462897181510925,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.949)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 51.775936126708984,
+    "rho_max_before": 0.9749294519424438,
+    "rho_max_after": 0.9717085957527161,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(5, -10.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 47.851192474365234,
+    "rho_max_before": 0.9140980243682861,
+    "rho_max_after": 0.9115043878555298,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.914)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 53.25445556640625,
+    "rho_max_before": 0.9551283121109009,
+    "rho_max_after": 0.9505156874656677,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 53.04964828491211,
+    "rho_max_before": 0.8599875569343567,
+    "rho_max_after": 0.8589247465133667,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 54.89149475097656,
+    "rho_max_before": 0.9524737596511841,
+    "rho_max_after": 0.9478065967559814,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(5, -3.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 62.39468765258789,
+    "rho_max_before": 0.8609886169433594,
+    "rho_max_after": 0.8609886169433594,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 56.17551040649414,
+    "rho_max_before": 0.9598780274391174,
+    "rho_max_after": 0.9598780274391174,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 44.776329040527344,
+    "rho_max_before": 0.9911442399024963,
+    "rho_max_after": 0.9909743070602417,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(5, -2.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 46.2718391418457,
+    "rho_max_before": 0.9452304244041443,
+    "rho_max_after": 0.9450625777244568,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 46.75713348388672,
+    "rho_max_before": 0.9544169902801514,
+    "rho_max_after": 0.9542632699012756,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 47.90736770629883,
+    "rho_max_before": 0.9088936448097229,
+    "rho_max_after": 0.9087409377098083,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 45.09022903442383,
+    "rho_max_before": 0.9567625522613525,
+    "rho_max_after": 0.9566057920455933,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 46.427127838134766,
+    "rho_max_before": 0.939175009727478,
+    "rho_max_after": 0.9390243291854858,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 46.262271881103516,
+    "rho_max_before": 0.9509432911872864,
+    "rho_max_after": 0.950779378414154,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 46.483943939208984,
+    "rho_max_before": 0.9351017475128174,
+    "rho_max_after": 0.9349426031112671,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 46.71202087402344,
+    "rho_max_before": 0.9550204277038574,
+    "rho_max_after": 0.9548630714416504,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(1, -2.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 47.756229400634766,
+    "rho_max_before": 0.9388059377670288,
+    "rho_max_after": 0.9386501312255859,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 47.07850646972656,
+    "rho_max_before": 0.9564064145088196,
+    "rho_max_after": 0.9562448859214783,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 48.182281494140625,
+    "rho_max_before": 0.9468398094177246,
+    "rho_max_after": 0.9455692768096924,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 49.25364685058594,
+    "rho_max_before": 0.9528936743736267,
+    "rho_max_after": 0.9523606896400452,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 49.92220687866211,
+    "rho_max_before": 0.9366942644119263,
+    "rho_max_after": 0.9361627101898193,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 47.84514236450195,
+    "rho_max_before": 0.9522541761398315,
+    "rho_max_after": 0.9520995020866394,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(1, -5.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 48.5371208190918,
+    "rho_max_before": 0.9426006078720093,
+    "rho_max_after": 0.9424418807029724,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 47.87905502319336,
+    "rho_max_before": 0.956890881061554,
+    "rho_max_after": 0.9567245244979858,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": -10.0,
+    "rho_max_before": 1.0282082557678223,
+    "rho_max_after": 1.0282082557678223,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 61.02495193481445,
+    "rho_max_before": 0.8515287041664124,
+    "rho_max_after": 0.8515287041664124,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 56.298030853271484,
+    "rho_max_before": 0.9522619843482971,
+    "rho_max_after": 0.952178955078125,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(0, -1.2)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 59.00727844238281,
+    "rho_max_before": 0.8535597324371338,
+    "rho_max_after": 0.8535597324371338,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 59.291473388671875,
+    "rho_max_before": 0.9509190320968628,
+    "rho_max_after": 0.9509190320968628,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": -10.0,
+    "rho_max_before": 0.9010260105133057,
+    "rho_max_after": 0.9010260105133057,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 51.78195571899414,
+    "rho_max_before": 0.9509237408638,
+    "rho_max_after": 0.9509237408638,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 47.877071380615234,
+    "rho_max_before": 0.9492251873016357,
+    "rho_max_after": 0.9490894675254822,
+    "is_safe": true,
+    "action_description": "Solver 求解失败，返回 Do Nothing: index 155 is out of bounds for axis 0 with size 28"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 48.460960388183594,
+    "rho_max_before": 0.9527196288108826,
+    "rho_max_after": 0.9524906873703003,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(5, -2.0)"
+  },
+  {
+    "source": "Expert_Replica",
+    "reward": -10.0,
+    "rho_max_before": 1.0282082557678223,
+    "rho_max_after": 0.9510735273361206,
+    "is_safe": true,
+    "action_description": "Expert Action (Score: 4)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 66.1658706665039,
+    "rho_max_before": 0.8585495948791504,
+    "rho_max_after": 0.8524885773658752,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.859)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 52.784202575683594,
+    "rho_max_before": 0.9479225277900696,
+    "rho_max_after": 0.9224269390106201,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.948)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 48.312252044677734,
+    "rho_max_before": 0.9835708737373352,
+    "rho_max_after": 0.9766750335693359,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(5, -2.5)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 48.73427963256836,
+    "rho_max_before": 0.9394434690475464,
+    "rho_max_after": 0.9236688613891602,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.939)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 47.78807067871094,
+    "rho_max_before": 0.9515570998191833,
+    "rho_max_after": 0.9446854591369629,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(0, -2.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 49.92093276977539,
+    "rho_max_before": 0.9494319558143616,
+    "rho_max_after": 0.9447609782218933,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.949)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 56.604652404785156,
+    "rho_max_before": 0.9548276662826538,
+    "rho_max_after": 0.9445891976356506,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.955)"
   }
 ]

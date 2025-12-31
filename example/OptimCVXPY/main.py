@@ -15,7 +15,7 @@ from evaluate import evaluate
 if __name__ == "__main__":
     # Create environment
     env = grid2op.make(
-        "l2rpn_case14_sandbox",
+        "l2rpn_wcci_2020",
         reward_class=RedispReward,
         backend=LightSimBackend(),
         other_rewards={

@@ -283,12 +283,12 @@ class OptimCVXPY(BaseAgent):
                                "Allowing it would require only little changes, if you want it let us know "
                                "with a github issue at https://github.com/rte-france/l2rpn-baselines/issues/new.")
             
-        if np.any(env.gen_renewable) and not env.action_space.supports_type("curtail"):
-            # TODO
-            raise RuntimeError("Impossible to create this class with an environment that does not allow "
-                               "curtailment when there are renewable generators on the grid. "
-                               "Allowing it would require only little changes, if you want it let us know "
-                               "with a github issue at https://github.com/rte-france/l2rpn-baselines/issues/new.")
+        # 修改：不再报错，而是记录一个 flag
+        self.supports_curtailment = env.action_space.supports_type("curtail")
+        self._curtailment_warning_needed = False
+        if np.any(env.gen_renewable) and not self.supports_curtailment:
+            self._curtailment_warning_needed = True
+            # raise RuntimeError(...) # 注释掉这行报错
             
         if not env.action_space.supports_type("redispatch"):
             raise RuntimeError("This type of agent can only perform actions using storage units, curtailment or"
@@ -444,6 +444,10 @@ class OptimCVXPY(BaseAgent):
             # self.logger.setLevel(level=logging.DEBUG)
         else:
             self.logger: logging.Logger = logger.getChild("OptimCVXPY")
+        
+        # 输出削减相关的警告（在 logger 初始化之后）
+        if self._curtailment_warning_needed:
+            self.logger.warning("Environment contains renewables but does not support curtailment. Curtailment optimization will be disabled.")
 
         self.flow_computed = np.zeros(env.n_line, dtype=float)
         self.flow_computed[:] = np.nan
@@ -599,8 +603,13 @@ class OptimCVXPY(BaseAgent):
             
             # curtailment
             mask_ = (self.bus_gen.value == bus_id) & obs.gen_renewable
-            self.curtail_down.value[bus_id] = 0.  # TODO obs.gen_p_before_curtail[mask_].sum() - tmp_[mask_].sum() ?
-            self.curtail_up.value[bus_id] = tmp_[mask_].sum()
+            self.curtail_down.value[bus_id] = 0.
+            
+            # 修改：如果不支持削减，强制上限为 0
+            if self.supports_curtailment:
+                self.curtail_up.value[bus_id] = tmp_[mask_].sum()
+            else:
+                self.curtail_up.value[bus_id] = 0.
             
             # storage
             self._add_storage_const(obs, bus_id)
@@ -900,7 +909,8 @@ class OptimCVXPY(BaseAgent):
         # becarefull here, the curtailment is given by the optimizer
         # in the amount of MW you remove, grid2op
         # expects a maximum value
-        if np.any(np.abs(curtailment) > 0.):
+        # 修改：只有在支持削减时才处理削减动作
+        if self.supports_curtailment and np.any(np.abs(curtailment) > 0.):
             curtailment_mw = np.zeros(shape=act.n_gen) -1.
             gen_curt = obs.gen_renewable & (obs.gen_p > 0.1)
             idx_gen = self.bus_gen.value[gen_curt].astype(int)
@@ -924,7 +934,7 @@ class OptimCVXPY(BaseAgent):
                 if np.any(gen_id_max):
                     curtailment_mw[gen_id_max] = act.gen_pmax[gen_id_max]
             act.curtail_mw = curtailment_mw
-        elif safe and np.abs(self.curtail_down.value).max() == 0.:
+        elif self.supports_curtailment and safe and np.abs(self.curtail_down.value).max() == 0.:
             # if curtail_down is all 0. then it means all generators are at their max
             # output in the observation, curtailment is de facto to 1, I "just"
             # need to tell it.
@@ -996,7 +1006,11 @@ class OptimCVXPY(BaseAgent):
             
             # curtailment
             mask_ = (self.bus_gen.value == bus_id) & obs.gen_renewable
-            self.curtail_down.value[bus_id] = obs.gen_p_before_curtail[mask_].sum() - tmp_[mask_].sum()
+            # 修改：如果不支持削减，强制下限为 0
+            if self.supports_curtailment:
+                self.curtail_down.value[bus_id] = obs.gen_p_before_curtail[mask_].sum() - tmp_[mask_].sum()
+            else:
+                self.curtail_down.value[bus_id] = 0.
             # self.curtail_up.value[bus_id] = tmp_[mask_].sum()
 
             # storage target
