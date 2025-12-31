@@ -1,81 +1,76 @@
 # -*- coding: utf-8 -*-
 """
-创建 ADAgent 实例的工厂函数
-参考 ExpertAgent 和 OptimCVXPY 的实现
+ADA Agent 工厂函数
+用于 L2RPN 竞赛或 grid2game
 """
 
 import os
+import sys
+from pathlib import Path
 from typing import Optional
+
+# 添加项目根目录到路径
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 from grid2op.Environment import Environment
 
-from ADAgent import ADAgent
-from config import SystemConfig, LLMConfig
+from ADA.agent import ADA_Agent
+from utils import OpenAIChat, get_logger
+
+logger = get_logger("ADA.make_agent")
 
 
 def make_agent(
     env: Environment,
-    dir_path: os.PathLike,
-    name: str = "ADAgent",
-    system_config: Optional[SystemConfig] = None,
-    llm_config: Optional[LLMConfig] = None,
-    rho_safe: float = 0.85,
-    rho_danger: float = 0.95,
+    dir_path: Optional[os.PathLike] = None,
+    grid_name: str = "IEEE14",
     **kwargs
-) -> ADAgent:
+) -> ADA_Agent:
     """
-    创建 ADAgent 实例
-    
-    参考 ExpertAgent.make_agent() 和 OptimCVXPY.make_agent() 的实现
+    创建 ADA Agent 实例（用于 L2RPN 竞赛或 grid2game）
     
     Parameters
     ----------
     env : Environment
-        Grid2Op 环境实例
-    
-    dir_path : os.PathLike
-        保存路径（用于知识库等）
-    
-    name : str, optional
-        智能体名称，默认为 "ADAgent"
-    
-    system_config : SystemConfig, optional
-        系统配置（如果为 None，则使用默认配置）
-    
-    llm_config : LLMConfig, optional
-        LLM 配置（如果为 None，则使用默认配置）
-    
-    rho_safe : float, optional
-        安全状态阈值（参考 OptimCVXPY），默认 0.85
-    
-    rho_danger : float, optional
-        危险状态阈值（参考 OptimCVXPY），默认 0.95
-    
-    **kwargs
-        其他参数
-    
+        The grid2op environment instance.
+        
+    dir_path : os.PathLike, optional
+        Path to directory (用于加载模型，可选).
+        
+    grid_name : str, optional
+        Grid identifier name. Used for local optimization.
+        Options: "IEEE14", "IEEE118", "IEEE118_R2". Default: "IEEE14".
+        
+    **kwargs:
+        其他参数传递给 ADA_Agent
+        
     Returns
     -------
-    ADAgent
-        ADAgent 实例
+    ADA_Agent
+        An instance of the ADA Agent.
     """
-    # 加载配置
-    if system_config is None:
-        system_config = SystemConfig()
+    # 初始化 LLM 客户端
+    try:
+        llm_client = OpenAIChat()
+    except Exception as e:
+        logger.warning(f"LLM 客户端初始化失败: {e}，将使用降级模式")
+        llm_client = None
     
-    if llm_config is None:
-        llm_config = LLMConfig()
-    
-    # 创建智能体（ADAgent 内部包含完整的 ADA 逻辑）
-    agent = ADAgent(
+    # 创建 Agent
+    agent = ADA_Agent(
         action_space=env.action_space,
         observation_space=env.observation_space,
-        name=name,
-        system_config=system_config,
-        llm_config=llm_config,
-        rho_safe=rho_safe,
-        rho_danger=rho_danger,
+        llm_client=llm_client,
+        env=env,  # 传递给 Solver 用于读取线路电抗
+        grid_name=grid_name,
         **kwargs
     )
+    
+    # 加载模型（如果有）
+    if dir_path:
+        agent.load(dir_path)
     
     return agent
 

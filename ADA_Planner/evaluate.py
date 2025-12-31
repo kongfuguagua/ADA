@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-ReAct Baseline Agent 评估程序
+ADA_Planner Baseline Agent 评估程序
 参考 OptimCVXPY 和 ExpertAgent 的评估接口
 """
 
@@ -24,22 +24,23 @@ from grid2op.Runner import Runner
 from grid2op.Reward import RedispReward, BridgeReward, CloseToOverflowReward, DistanceReward
 from grid2op.Action import TopologyChangeAction
 
-# 导入 ReAct Agent（支持直接运行和作为模块导入）
+# 导入 ADA_Planner Agent（支持直接运行和作为模块导入）
 try:
     # 如果作为模块导入，使用相对导入
-    from .agent import ReActAgent
+    from .agent import ADA_Planner
 except ImportError:
     # 如果直接运行，使用绝对导入
     try:
-        from ReAct_Baseline.agent import ReActAgent
+        from ADA_Planner.agent import ADA_Planner
     except ImportError:
-        from agent import ReActAgent
+        from agent import ADA_Planner
 
+# 导入 LLM 和日志工具
 from utils import OpenAIChat, get_logger
 
-logger = get_logger("ReActEvaluate")
+logger = get_logger("ADA_PlannerEvaluate")
 
-DEFAULT_LOGS_DIR = "./logs-eval/react-baseline"
+DEFAULT_LOGS_DIR = "./logs-eval/ADA_Planner"
 DEFAULT_NB_EPISODE = 1
 DEFAULT_NB_PROCESS = 1
 DEFAULT_MAX_STEPS = -1
@@ -47,7 +48,7 @@ DEFAULT_MAX_STEPS = -1
 
 def cli():
     """命令行参数解析"""
-    parser = argparse.ArgumentParser(description="Evaluate ReAct Baseline Agent")
+    parser = argparse.ArgumentParser(description="Evaluate ADA_Planner Baseline Agent")
     
     # 环境参数
     parser.add_argument("--data_dir", required=True,
@@ -128,12 +129,12 @@ def evaluate(env,
         raise
     
     # 创建 ReAct Agent
-    agent = ReActAgent(
+    agent = ADA_Planner(
         action_space=env.action_space,
         observation_space=env.observation_space,
         llm_client=llm_client,
         max_react_steps=max_react_steps,
-        name="ReActAgent",
+        name="ADA_Planner",
         rho_danger=rho_danger,
         **kwargs
     )

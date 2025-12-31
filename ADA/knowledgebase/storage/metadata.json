@@ -1,0 +1,914 @@
+[
+  {
+    "source": "Math_Dispatch",
+    "reward": 65.17876434326172,
+    "rho_max_before": 0.857577383518219,
+    "rho_max_after": 0.8570212125778198,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.858)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 54.49187469482422,
+    "rho_max_before": 0.9520788192749023,
+    "rho_max_after": 0.9492381811141968,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.952)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 65.17876434326172,
+    "rho_max_before": 0.857577383518219,
+    "rho_max_after": 0.8570212125778198,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.858)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 54.49187469482422,
+    "rho_max_before": 0.9520788192749023,
+    "rho_max_after": 0.9492381811141968,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.952)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": -10.0,
+    "rho_max_before": 0.9244734048843384,
+    "rho_max_after": 0.9244734048843384,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.924)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 54.615882873535156,
+    "rho_max_before": 0.9513105750083923,
+    "rho_max_after": 0.9498618245124817,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.951)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 62.39468765258789,
+    "rho_max_before": 0.8609886169433594,
+    "rho_max_after": 0.8609886169433594,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.861)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 55.773006439208984,
+    "rho_max_before": 0.9514601230621338,
+    "rho_max_after": 0.9508551359176636,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.951)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 65.17876434326172,
+    "rho_max_before": 0.857577383518219,
+    "rho_max_after": 0.8570212125778198,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.858)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 65.17876434326172,
+    "rho_max_before": 0.857577383518219,
+    "rho_max_after": 0.8570212125778198,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.858)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 65.17876434326172,
+    "rho_max_before": 0.857577383518219,
+    "rho_max_after": 0.8570212125778198,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.858)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 54.49187469482422,
+    "rho_max_before": 0.9520788192749023,
+    "rho_max_after": 0.9492381811141968,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.952)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 65.17876434326172,
+    "rho_max_before": 0.857577383518219,
+    "rho_max_after": 0.8570212125778198,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.858)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 65.17876434326172,
+    "rho_max_before": 0.857577383518219,
+    "rho_max_after": 0.8570212125778198,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.858)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 54.49187469482422,
+    "rho_max_before": 0.9520788192749023,
+    "rho_max_after": 0.9492381811141968,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.952)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": -10.0,
+    "rho_max_before": 0.9244734048843384,
+    "rho_max_after": 0.9244734048843384,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.924)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 54.615882873535156,
+    "rho_max_before": 0.9513105750083923,
+    "rho_max_after": 0.9498618245124817,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.951)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 62.39468765258789,
+    "rho_max_before": 0.8609886169433594,
+    "rho_max_after": 0.8609886169433594,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.861)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 55.773006439208984,
+    "rho_max_before": 0.9514601230621338,
+    "rho_max_after": 0.9508551359176636,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.951)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 65.17876434326172,
+    "rho_max_before": 0.857577383518219,
+    "rho_max_after": 0.8570212125778198,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.858)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 54.49187469482422,
+    "rho_max_before": 0.9520788192749023,
+    "rho_max_after": 0.9492381811141968,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.952)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": -10.0,
+    "rho_max_before": 0.9244734048843384,
+    "rho_max_after": 0.9244734048843384,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.924)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 54.615882873535156,
+    "rho_max_before": 0.9513105750083923,
+    "rho_max_after": 0.9498618245124817,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.951)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 62.39468765258789,
+    "rho_max_before": 0.8609886169433594,
+    "rho_max_after": 0.8609886169433594,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.861)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 55.773006439208984,
+    "rho_max_before": 0.9514601230621338,
+    "rho_max_after": 0.9508551359176636,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.951)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 52.922637939453125,
+    "rho_max_before": 0.9472061395645142,
+    "rho_max_after": 0.9471140503883362,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.947)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 54.90933609008789,
+    "rho_max_before": 0.9503007531166077,
+    "rho_max_after": 0.949783205986023,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.950)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 57.20595932006836,
+    "rho_max_before": 0.9203296899795532,
+    "rho_max_after": 0.9202179908752441,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.920)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 65.17876434326172,
+    "rho_max_before": 0.857577383518219,
+    "rho_max_after": 0.8570212125778198,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.858)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 54.49187469482422,
+    "rho_max_before": 0.9520788192749023,
+    "rho_max_after": 0.9492381811141968,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.952)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 65.17876434326172,
+    "rho_max_before": 0.857577383518219,
+    "rho_max_after": 0.8570212125778198,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.858)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 54.49187469482422,
+    "rho_max_before": 0.9520788192749023,
+    "rho_max_after": 0.9492381811141968,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.952)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 49.69883728027344,
+    "rho_max_before": 0.9420725107192993,
+    "rho_max_after": 0.9423158764839172,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.942)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 49.81483459472656,
+    "rho_max_before": 0.9557780623435974,
+    "rho_max_after": 0.9540613889694214,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.956)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 51.16394805908203,
+    "rho_max_before": 0.9243803024291992,
+    "rho_max_after": 0.9233607053756714,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.924)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 50.041255950927734,
+    "rho_max_before": 0.9592311382293701,
+    "rho_max_after": 0.9589752554893494,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(1, -5.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 49.22002410888672,
+    "rho_max_before": 0.9435204863548279,
+    "rho_max_after": 0.9383653998374939,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.944)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 50.0125732421875,
+    "rho_max_before": 0.9501668214797974,
+    "rho_max_after": 0.9494097828865051,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(1, -2.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 48.438323974609375,
+    "rho_max_before": 0.943621814250946,
+    "rho_max_after": 0.9367253184318542,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.944)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 52.47859573364258,
+    "rho_max_before": 0.9686838388442993,
+    "rho_max_after": 0.9652857184410095,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(1, -5.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 50.508792877197266,
+    "rho_max_before": 0.910883367061615,
+    "rho_max_after": 0.8862185478210449,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.911)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 53.00967025756836,
+    "rho_max_before": 0.9521238803863525,
+    "rho_max_after": 0.9474899172782898,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.952)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 48.83427810668945,
+    "rho_max_before": 0.9492948651313782,
+    "rho_max_after": 0.9364794492721558,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.949)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 52.467594146728516,
+    "rho_max_before": 0.9630263447761536,
+    "rho_max_after": 0.9593753218650818,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(5, -2.5)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 49.72492599487305,
+    "rho_max_before": 0.941548764705658,
+    "rho_max_after": 0.9380680918693542,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.942)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 50.87976837158203,
+    "rho_max_before": 0.9586763978004456,
+    "rho_max_after": 0.9555766582489014,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.959)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 48.96466064453125,
+    "rho_max_before": 0.9235405921936035,
+    "rho_max_after": 0.9166644215583801,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.924)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 48.06577682495117,
+    "rho_max_before": 0.9547609090805054,
+    "rho_max_after": 0.9535171985626221,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.955)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 49.345062255859375,
+    "rho_max_before": 0.9466962814331055,
+    "rho_max_after": 0.9460420608520508,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.947)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 48.61653137207031,
+    "rho_max_before": 0.9508873820304871,
+    "rho_max_after": 0.9499654173851013,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.951)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 48.46065139770508,
+    "rho_max_before": 0.9488269090652466,
+    "rho_max_after": 0.9481112360954285,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.949)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 47.69322967529297,
+    "rho_max_before": 0.9610568881034851,
+    "rho_max_after": 0.9595770239830017,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.961)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 49.80400466918945,
+    "rho_max_before": 0.9491369724273682,
+    "rho_max_after": 0.9479683041572571,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.949)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 48.01771926879883,
+    "rho_max_before": 0.9652061462402344,
+    "rho_max_after": 0.9644714593887329,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(1, -3.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 50.13619613647461,
+    "rho_max_before": 0.9482895731925964,
+    "rho_max_after": 0.945159912109375,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.948)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 47.843685150146484,
+    "rho_max_before": 0.9536699056625366,
+    "rho_max_after": 0.9531590342521667,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(1, -2.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 48.8287239074707,
+    "rho_max_before": 0.947372317314148,
+    "rho_max_after": 0.946476936340332,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.947)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 48.628787994384766,
+    "rho_max_before": 0.9570794701576233,
+    "rho_max_after": 0.9568432569503784,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: do_nothing()"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": -10.0,
+    "rho_max_before": 0.9244734048843384,
+    "rho_max_after": 0.9244734048843384,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.924)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 54.615882873535156,
+    "rho_max_before": 0.9513105750083923,
+    "rho_max_after": 0.9498618245124817,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.951)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 62.39468765258789,
+    "rho_max_before": 0.8609886169433594,
+    "rho_max_after": 0.8609886169433594,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.861)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 55.773006439208984,
+    "rho_max_before": 0.9514601230621338,
+    "rho_max_after": 0.9508551359176636,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.951)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 52.922637939453125,
+    "rho_max_before": 0.9472061395645142,
+    "rho_max_after": 0.9471140503883362,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.947)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 54.90933609008789,
+    "rho_max_before": 0.9503007531166077,
+    "rho_max_after": 0.949783205986023,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.950)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 57.20595932006836,
+    "rho_max_before": 0.9203296899795532,
+    "rho_max_after": 0.9202179908752441,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.920)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 55.13112258911133,
+    "rho_max_before": 0.9561750888824463,
+    "rho_max_after": 0.9552077054977417,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.956)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 57.69740676879883,
+    "rho_max_before": 0.9134271740913391,
+    "rho_max_after": 0.9132924675941467,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.913)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 52.96028137207031,
+    "rho_max_before": 0.9501909017562866,
+    "rho_max_after": 0.9495286345481873,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.950)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 52.582664489746094,
+    "rho_max_before": 0.9103733897209167,
+    "rho_max_after": 0.9102312922477722,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.910)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 53.40687561035156,
+    "rho_max_before": 0.9550626277923584,
+    "rho_max_after": 0.9521896243095398,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.955)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 52.703826904296875,
+    "rho_max_before": 0.9473369717597961,
+    "rho_max_after": 0.9431905150413513,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.947)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 51.68730545043945,
+    "rho_max_before": 0.9551227688789368,
+    "rho_max_after": 0.953278124332428,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.955)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 53.6812629699707,
+    "rho_max_before": 0.9287471771240234,
+    "rho_max_after": 0.9275572299957275,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.929)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 51.11576461791992,
+    "rho_max_before": 0.9537233710289001,
+    "rho_max_after": 0.951937735080719,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.954)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 51.45831298828125,
+    "rho_max_before": 0.9494403600692749,
+    "rho_max_after": 0.9482771158218384,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.949)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 50.90205001831055,
+    "rho_max_before": 0.9506031274795532,
+    "rho_max_after": 0.9492979645729065,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.951)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 50.5129508972168,
+    "rho_max_before": 0.9467629790306091,
+    "rho_max_after": 0.9456146955490112,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.947)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 50.00325012207031,
+    "rho_max_before": 0.9520657062530518,
+    "rho_max_after": 0.9509204030036926,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(1, -5.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 51.53333282470703,
+    "rho_max_before": 0.9395872950553894,
+    "rho_max_after": 0.9384368658065796,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.940)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 51.89756393432617,
+    "rho_max_before": 0.9544451236724854,
+    "rho_max_after": 0.9501246213912964,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.954)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 53.44175720214844,
+    "rho_max_before": 0.9493190050125122,
+    "rho_max_after": 0.9448682069778442,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.949)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 48.50967788696289,
+    "rho_max_before": 0.9579188823699951,
+    "rho_max_after": 0.9562034010887146,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.958)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 50.39851379394531,
+    "rho_max_before": 0.9248851537704468,
+    "rho_max_after": 0.9236051440238953,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.925)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 49.48381805419922,
+    "rho_max_before": 0.9573025703430176,
+    "rho_max_after": 0.9549405574798584,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.957)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 47.02344512939453,
+    "rho_max_before": 0.9480271339416504,
+    "rho_max_after": 0.9479009509086609,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.948)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 51.58648681640625,
+    "rho_max_before": 0.9580787420272827,
+    "rho_max_after": 0.9575487971305847,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.958)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 55.792091369628906,
+    "rho_max_before": 0.9421886205673218,
+    "rho_max_after": 0.9376993775367737,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.942)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 50.61931228637695,
+    "rho_max_before": 0.9500294327735901,
+    "rho_max_after": 0.9456149339675903,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(1, -2.0)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": -10.0,
+    "rho_max_before": 1.0282082557678223,
+    "rho_max_after": 1.026538372039795,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(5, -5.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 61.02495193481445,
+    "rho_max_before": 0.8515287041664124,
+    "rho_max_after": 0.8515287041664124,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.852)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 55.7969856262207,
+    "rho_max_before": 0.9514160752296448,
+    "rho_max_after": 0.9505210518836975,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.951)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 59.00727844238281,
+    "rho_max_before": 0.8535597324371338,
+    "rho_max_after": 0.8535597324371338,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.854)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 59.226409912109375,
+    "rho_max_before": 0.9507927298545837,
+    "rho_max_after": 0.9505863189697266,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.951)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": -10.0,
+    "rho_max_before": 0.9010260105133057,
+    "rho_max_after": 0.9010260105133057,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.901)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 51.08465576171875,
+    "rho_max_before": 0.9505891799926758,
+    "rho_max_after": 0.9500772953033447,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.951)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 50.20465087890625,
+    "rho_max_before": 0.9492549896240234,
+    "rho_max_after": 0.9483017921447754,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.949)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 50.97386932373047,
+    "rho_max_before": 0.9513756632804871,
+    "rho_max_after": 0.9502302408218384,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.951)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 50.54472351074219,
+    "rho_max_before": 0.9463874697685242,
+    "rho_max_after": 0.9453989267349243,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.946)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 51.923980712890625,
+    "rho_max_before": 0.9616678953170776,
+    "rho_max_after": 0.9578372240066528,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(5, -2.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 52.471622467041016,
+    "rho_max_before": 0.9455055594444275,
+    "rho_max_after": 0.9416848421096802,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.946)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 51.3747444152832,
+    "rho_max_before": 0.9601356983184814,
+    "rho_max_after": 0.9562870860099792,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(5, -3.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 49.89784622192383,
+    "rho_max_before": 0.9344555139541626,
+    "rho_max_after": 0.9305896162986755,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.934)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 51.70024108886719,
+    "rho_max_before": 0.950141966342926,
+    "rho_max_after": 0.9463033080101013,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.950)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 53.32843780517578,
+    "rho_max_before": 0.9350528717041016,
+    "rho_max_after": 0.9312330484390259,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.935)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 51.575016021728516,
+    "rho_max_before": 0.956748902797699,
+    "rho_max_after": 0.952930212020874,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.957)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 50.80351257324219,
+    "rho_max_before": 0.9494670629501343,
+    "rho_max_after": 0.9472089409828186,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.949)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 49.177181243896484,
+    "rho_max_before": 0.9641290307044983,
+    "rho_max_after": 0.963482141494751,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(5, -2.5)"
+  },
+  {
+    "source": "Expert_Replica",
+    "reward": -10.0,
+    "rho_max_before": 1.0282082557678223,
+    "rho_max_after": 0.9510735273361206,
+    "is_safe": true,
+    "action_description": "Expert Action (Score: 4)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 66.1658706665039,
+    "rho_max_before": 0.8585495948791504,
+    "rho_max_after": 0.8524885773658752,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.859)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 58.28616714477539,
+    "rho_max_before": 0.9529904723167419,
+    "rho_max_after": 0.9502102136611938,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.953)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 52.28490447998047,
+    "rho_max_before": 0.9217228293418884,
+    "rho_max_after": 0.8988274335861206,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.922)"
+  },
+  {
+    "source": "LLM_Fusion",
+    "reward": 47.830657958984375,
+    "rho_max_before": 0.9880220293998718,
+    "rho_max_after": 0.9811285138130188,
+    "is_safe": true,
+    "action_description": "LLM 融合策略: redispatch(5, -2.0)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 48.67141342163086,
+    "rho_max_before": 0.9357960224151611,
+    "rho_max_after": 0.9289178848266602,
+    "is_safe": true,
+    "action_description": "预防模式优化：缓解高负载风险 (max_rho=0.936)"
+  },
+  {
+    "source": "Math_Dispatch",
+    "reward": 50.55177307128906,
+    "rho_max_before": 0.9508708119392395,
+    "rho_max_after": 0.9496946930885315,
+    "is_safe": true,
+    "action_description": "危险模式优化：最小化过载 (max_rho=0.951)"
+  }
+]

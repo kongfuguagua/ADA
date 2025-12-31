@@ -221,7 +221,7 @@ class VectorStore:
             return True
         except Exception as e:
             print(f"加载向量库失败: {e}")
-            return False
+            raise e
     
     def __len__(self) -> int:
         return len(self.documents)

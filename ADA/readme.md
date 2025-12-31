@@ -1,248 +1,304 @@
-# ADA - Agile Dispatch Agent
+# ADA (Adaptive Dispatch & Action) 系统设计文档 v2.1
 
-知识驱动的复杂系统敏捷调度智能体框架
+## 1. 设计宗旨与核心理念
 
-## 论文需求响应表
+ADA 的目标是构建一个**神经符号（Neuro-Symbolic）**混合智能体，通过多源策略竞争与实证仿真，解决电网控制中的稳定性与泛化性平衡问题。
 
-基于 ACL 论文 "Agile Dispatch Agent" 的设计需求：
+**核心原则：**
 
-| 论文核心概念 | 实现模块 | 状态 |
-|------------|---------|------|
-| 知识驱动的动态演化过程 | 整体架构 | ✅ |
-| 主动状态增广 (Active State Augmentation) | `Planner/core.py` | ✅ |
-| 问题-算法对齐 (Problem-Algorithm Alignment) | `Solver/matcher.py` | ✅ |
-| 混合评分 (Physical + LLM-as-a-Judge) | `Judger/` | ✅ |
-| MCTS 驱动的知识更新 | `Summarizer/core.py` | ✅ |
-| 任务知识 (TK) 检索与更新 | `knowledgebase/` | ✅ |
-| 动作知识 (AK) 检索与更新 | `knowledgebase/` | ✅ |
-| 闭环反馈与 Self-Correction | `main.py` | ✅ |
+1. **混合智能与全量竞优 (Hybrid Intelligence & Tournament Selection)**：
+* **Planner (符号/规则)**：**完全复刻** `ExpertAgent` 的核心算法（如基于灵敏度的节点分裂、状态增广、拓扑搜索）。不依赖 LLM，提供基于物理规则的离散拓扑动作。
+* **Solver (数学/优化)**：**完全复刻** `OptimCVXPY` 的凸优化逻辑。利用 DC 潮流模型求解连续变量（重调度/削减/储能），提供基于数学优化的动作。
+* **Judger (神经/融合)**：LLM 作为高层智脑。它分析 Planner 和 Solver 的输出，结合知识库（RAG）的历史经验，试图发现单一方法无法覆盖的**融合策略**（例如：Planner 的拓扑 + Solver 的重调度）。
+* **Simulator (实证/裁判)**：**核心决策关卡**。它不再只是验证 LLM，而是接收 **{Planner 候选集 + Solver 候选集 + LLM 增强集}** 构成的完整动作空间。对该空间进行**暴力搜索/全排序仿真**，纯粹依据仿真结果（安全性、Reward）择优执行。
 
-## 系统架构
+
+2. **严格的输入规范 (Strict Specification)**：
+* LLM 的输出必须经过 `parser.py` 的严格匹配和规范化，转化为标准 Grid2Op 动作对象，杜绝幻觉产生的非法动作。
+
+
+3. **闭环进化 (Closed-Loop Evolution)**：
+* **Summarizer** 负责复盘。它将 Simulator 选出的**最优策略**（无论是来自 Expert、Solver 还是 LLM）与当前场景上下文结合，生成结构化经验存入知识库，实现持续学习。
+
+
+
+---
+
+## 2. 系统架构概览
+
+```mermaid
+graph TD
+    Obs[Grid2Op Observation] --> Planner[Module: Planner (Expert Logic)]
+    Obs --> Solver[Module: Solver (Convex Opt)]
+    Obs --> KB[Module: KnowledgeBase (RAG)]
+    
+    %% 原始候选生成
+    Planner -->|Topology Candidates| ActionPool
+    Solver -->|Dispatch Candidate| ActionPool
+    
+    %% LLM 融合增强
+    Planner -->|Topology Info| Judger
+    Solver -->|Dispatch Info| Judger
+    KB -->|History Context| Judger
+    Obs -->|Context| Judger
+    
+    Judger[Module: Judger (LLM Strategy)] -->|Fused/Enhanced Actions| ActionPool
+    
+    %% 仿真竞技场
+    ActionPool{Combined Action Space} -->|Brute-Force Simulation| Simulator[Module: Simulator (The Arena)]
+    
+    %% 执行与学习
+    Simulator -->|Best Action| Executor[Execute Action]
+    Executor -->|Result| Summarizer[Module: Summarizer]
+    Summarizer -->|Update| KB
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        ADA 系统架构                              │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐  │
-│  │ Planner  │───▶│  Solver  │───▶│  Judger  │───▶│Summarizer│  │
-│  └────┬─────┘    └──────────┘    └────┬─────┘    └────┬─────┘  │
-│       │                               │               │        │
-│       │    ┌─────────────────────────┐│               │        │
-│       └───▶│    KnowledgeBase        │◀───────────────┘        │
-│            │   (TK + AK 向量库)       │                         │
-│            └─────────────────────────┘                         │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │                    Grid2Op 环境                          │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+
+---
+
+## 3. 详细模块设计
+
+### 3.1 基础数据结构 (Shared Definitions)
+
+定义统一的数据包，用于在模块间流转。
+
+* **`CandidateAction` 类**：
+* `source`: 来源标识 ("Expert_Topo", "Math_Dispatch", "LLM_Fusion", "LLM_Recovery")
+* `action_obj`: Grid2Op BaseAction 对象 (核心载体)
+* `description`: 动作的自然语言/代码描述
+* `simulation_result`: (由 Simulator 填充) `dict(is_safe, rho_max, reward, margin)`
+
+
+
+### 3.2 Module: Planner (拓扑专家 - 物理规则)
+
+**职责**：基于电网物理规则和图算法，通过**状态增广**生成拓扑候选集。
+
+**核心逻辑**：
+
+1. **算法复刻**：完整实现 `ExpertAgent` (L2RPN Baseline) 的逻辑。
+* 计算过载线路的敏感度分析。
+* 构建影响图 (Influence Graph)。
+* 执行节点分裂 (Bus Splitting) 和线路开关 (Line Switching) 的搜索。
+
+
+2. **状态增广**：不局限于单一动作，而是生成 Top-N 个可能的拓扑变更方案。
+3. **独立性**：此模块纯 Python 实现，**不调用 LLM**。
+
+**输出**：`List[CandidateAction]` (Source: "Expert_Topo")
+
+### 3.3 Module: Solver (优化专家 - 数学计算)
+
+**职责**：基于凸优化解决功率流平衡问题，处理连续变量。
+
+**核心逻辑**：
+
+1. **算法复刻**：完整实现 `OptimCVXPY` 的逻辑。
+2. **建模求解**：
+* 基于 DC 潮流模型构建优化问题。
+* 目标函数：最小化过载 (Danger Mode) 或 最小化成本/最大化余量 (Safe Mode)。
+* 约束条件：线路热极限、发电机爬坡、储能限制。
+
+
+3. **独立性**：此模块纯 Python + CVXPY 实现，**不调用 LLM**。
+
+**输出**：`List[CandidateAction]` (通常为 1 个, Source: "Math_Dispatch")
+
+### 3.4 Module: KnowledgeBase (记忆库)
+
+**职责**：提供历史上的成功案例作为参考。
+
+**核心逻辑**：
+
+1. **存储结构**：JSON / Vector DB。
+2. **Key (Embedding)**：过载线路 ID、过载程度 (Rho)、拓扑指纹、发电机出力分布。
+3. **Value**：场景描述、采取的动作（Action Code）、执行效果（Reward, Survival Steps）。
+4. **检索策略**：基于相似度检索 Top-K 历史场景，优先返回 Reward 高且存活时间长的案例。
+
+### 3.5 Module: Judger (融合中枢 - LLM)
+
+**职责**：作为“战略指挥官”，利用推理能力融合多方信息，生成**更优的组合策略**。
+
+**输入**：
+
+1. **Planner 方案**：Top-N 拓扑动作及其预期效果。
+2. **Solver 方案**：重调度计划及其成本。
+3. **KB 历史**：类似场景下别人是怎么做的。
+4. **当前观测**：过载详情。
+
+**思考与生成 (Chain of Thought)**：
+
+1. **分析差异**：Planner 解决了 A 问题但忽略了 B？Solver 成本太高？
+2. **策略融合**：
+* *组合模式*：是否可以将 Planner 的【节点分裂】与 Solver 的【重调度】叠加？
+* *历史迁移*：历史记录显示这里应该断开 Line X，但 Planner 没提，我补充这个动作。
+
+
+3. **规范化输出**：
+* LLM 生成建议文本 -> `parser.py` 解析匹配 -> 生成 `Grid2Op Action` 对象。
+* **注意**：LLM 生成的动作如果解析失败，直接丢弃，不进入仿真池。
+
+
+
+**输出**：`List[CandidateAction]` (Source: "LLM_Fusion")
+
+### 3.6 Module: Simulator (竞技场 - 实证排序)
+
+**职责**：**暴力搜索与择优**。这是系统最核心的过滤器。
+
+**核心逻辑**：
+
+1. **构建动作池 (Action Pool)**：Planner\Solver\LLM全部结果入池
+
+
+2. **去重**：移除重复的动作对象。
+3. **全量仿真 (Brute-Force Simulation)**：
+* 对 Pool 中的**每一个**动作执行 `obs.simulate(action)`。
+
+
+4. **多维排序 (Hierarchical Sorting)**：
+1. **安全性 (Safety)**: 必须无异常、无发散、无解列。
+2. **过载消除 (Rho)**: 优先选择 `Max Rho` 最低的。
+3. **稳定性 (Margin)**: 在消除过载的前提下，选择安全裕度最大的。
+4. **奖励 (Reward)**: Grid2Op 返回的 Reward 最大化。
+5. **成本 (Cost)**: 操作代价最小（如：优先拓扑，次选重调度）。
+
+
+
+**输出**：返回排序第一的 `Best Actions`。
+
+### 3.7 Module: Summarizer (学习者)
+
+**职责**：将实证结果转化为经验。
+
+**逻辑**：
+
+1. **输入**：当前场景 + 最终被 Simulator 选中的 Best Action (及其来源) + 仿真结果。
+2. **总结**：LLM 生成简短分析。“场景：Line 14 重度过载。策略：采用了 [来源: LLM_Fusion] 的方案，结合了 Planner 的拓扑和 Solver 的重调度，成功将 Rho 降至 0.8。”
+3. **入库**：调用 `KnowledgeBase.add_experience`。
+
+---
+
+## 4. 核心工作流伪代码 (For Coder-AI)
+
+```python
+class ADA_Agent(BaseAgent):
+    def act(self, observation, reward, done):
+        # --- Phase 1: 并行生成候选集 (Candidate Generation) ---
+        
+        # 1. Planner (复刻 ExpertAgent): 基于物理规则生成拓扑候选
+        planner_candidates = self.planner.suggest_topologies(observation) 
+        # type: List[CandidateAction], source="Expert_Topo"
+        
+        # 2. Solver (复刻 OptimCVXPY): 基于数学优化生成调度候选
+        solver_candidate = self.solver.solve_dispatch(observation)
+        # type: List[CandidateAction], source="Math_Dispatch"
+        
+        # 3. KnowledgeBase: 获取历史参考
+        history_context = self.kb.query(observation)
+        
+        # --- Phase 2: LLM 融合增强 (Fusion & Enhancement) ---
+        
+        # 4. Judger (LLM): 分析上述输入，尝试生成融合动作
+        # 输入：Planner 建议, Solver 建议, 历史, 当前状态
+        # 输出：经过 parser.py 验证的动作列表
+        llm_candidates = self.judger.generate_fused_actions(
+            observation, 
+            planner_candidates, 
+            solver_candidate, 
+            history_context
+        )
+        # type: List[CandidateAction], source="LLM_Fusion"
+        
+        # --- Phase 3: 仿真竞技场 (The Arena) ---
+        
+        # 5. 构建混合动作空间 (去重)
+        all_candidates = unique(planner_candidates + solver_candidate + llm_candidates)
+        
+        verified_results = []
+        for candidate in all_candidates:
+            # 对每个候选动作进行仿真
+            sim_obs, _, sim_done, sim_info = observation.simulate(candidate.action_obj)
+            
+            # 评估仿真结果 (包含安全性检查、Rho计算、Reward预估)
+            eval_result = self.simulator.evaluate(observation, sim_obs, sim_done, sim_info)
+            
+            # 记录结果
+            candidate.simulation_result = eval_result
+            if eval_result['is_safe']:
+                verified_results.append(candidate)
+        
+        # 6. 择优 (Selection)
+        # 依据：1. 是否消除过载 2. Max Rho 最小 3. Reward 最大
+        if not verified_results:
+             # 如果所有动作都导致游戏结束，返回空动作或 Solver 的降级方案
+             final_action = self.action_space({}) 
+             best_record = None
+        else:
+             verified_results.sort(key=lambda x: (x.simulation_result['rho_max'], -x.simulation_result['reward']))
+             best_record = verified_results[0] # 取 Rho 最小的
+             final_action = best_record.action_obj
+        
+        # --- Phase 4: 闭环学习 (Learning) ---
+        
+        if best_record:
+            self.summarizer.summarize(observation, best_record)
+        
+        return final_action
+
 ```
 
-## 目录结构
+## 5. 关键实现细节与坑点规避
+
+1. **ExpertAgent 代码迁移**：
+* 必须将 `ExpertAgent` 中依赖 `alphaDeesp` 的核心逻辑（如 `getRankedOverloads`, `compute_new_network_changes`）提取出来，重新实现到 analysis/expert 模块中，确保不依赖外部不可控环境。
+
+
+2. **Parser 的重要性**：
+* Judger (LLM) 输出的必须是能够被解析的指令（例如 JSON 格式描述："Action: combine, Topo: sub_id_1, Redispatch: gen_2 +10"）。`parser.py` 需要极其健壮，能够将这些文本描述精确转换为 Planner 和 Solver 生成的原始 Action 对象的组合。
+
+
+3. **计算开销控制**：
+* 全量仿真（Brute-force）非常消耗时间。
+* **优化策略**：Planner 限制 Top-5，Solver 限制 1 个，LLM 限制 Top-3。总仿真次数控制在 10 次以内/步。可以使用多线程并行仿真 (`obs.simulate` 通常是 CPU 密集的)。
+
+
+4. **Do Nothing 处理**：
+* 如果当前电网状态安全（Rho < 0.9），可以直接跳过复杂的融合流程，或者仅运行 Solver 的经济调度模式，节省 Token 和计算时间。
+
+
+
+## 6. 文件结构建议
 
 ```
 ADA/
-├── main.py              # 系统入口，编排器
-├── readme.md            # 本文档
-├── requirements.txt     # 依赖
-│
-├── utils/               # 通用工具层
-│   ├── const.py         # 数据契约定义
-│   ├── interact.py      # Agent 接口定义
-│   ├── llm.py           # LLM 服务封装
-│   ├── embeddings.py    # Embedding 服务封装
-│   └── logger.py        # 日志系统
-│
-├── config/              # 配置层
-│   ├── llm_config.py    # LLM API 配置
-│   └── system_config.py # 系统参数配置
-│
-├── knowledgebase/       # 知识库
-│   ├── service.py       # 知识服务层
-│   └── VectorBase.py    # 向量存储
-│
-├── Planner/             # 规划智能体
-│   ├── core.py          # 主逻辑
-│   ├── prompt.py        # Prompt 模板
-│   └── tools/           # 分析工具（为 Planner 决策服务）
-│
-├── Solver/              # 求解智能体
-│   ├── solver.py        # 主入口
-│   ├── feature.py       # 特征提取
-│   ├── matcher.py       # 算法匹配
-│   ├── prompt.py        # Prompt 模板
-│   └── Template/        # 算法库
-│
-├── Judger/              # 评估智能体
-│   ├── core.py          # 主逻辑
-│   ├── prompt.py        # Prompt 模板
-│   ├── Reward/          # 评分模块
-│   └── Debug/           # 诊断模块
-│
-├── Summarizer/          # 总结智能体
-│   ├── core.py          # 主逻辑 + MCTS
-│   ├── prompt.py        # Prompt 模板
-│   └── knowledge_updater.py  # 知识更新
-│
-└── env/                 # 环境交互层
-    ├── config.py        # Grid2Op 配置
-    ├── grid2op_env.py   # 环境封装
-    └── tools.py         # 环境交互工具（发送命令、获取数据）
-```
+├── __init__.py              # 模块导出
+├── agent.py                 # ADA_Agent 主类 (实现 grid2op.BaseAgent 接口)
+├── evaluate.py              # 评估脚本 (参考 Template/evaluate.py)
+├── main.py                  # 主入口脚本 (参考 Template/main.py)
+├── README.md                # 使用文档和说明
+├── core/                    # 核心模块目录
+│   ├── __init__.py
+│   ├── planner.py           # 复刻 ExpertAgent (物理规则拓扑专家)
+│   ├── solver.py            # 复刻 OptimCVXPY (凸优化调度专家)
+│   ├── judger.py            # LLM 融合策略生成
+│   ├── simulator.py         # 仿真评价体系 (暴力搜索与排序逻辑)
+│   └── summarizer.py        # 经验总结与入库逻辑
+├── analysis/                # 分析模块目录 (参考 Planner/analysis/)
+│   ├── __init__.py
+│   ├── expert.py            # ExpertAgent分析、计算方法
+│   └── optim.py             # OptimCVXPY优化问题计算方法
+├── knowledgebase/           # 知识库模块
+│   ├── storage/              # 知识库数据存储目录 (JSON/Vector DB 文件)
+│   ├── __init__.py
+│   ├── service.py           # 知识库服务接口
+│   ├── VectorBase.py        # 向量数据库封装
+│   └── utils.py             # 知识库工具函数
+├── utils/                   # 工具模块
+│   ├── __init__.py
+│   ├── formatters.py            # Grid2Op Observation -> 文本描述的转换逻辑
+│   ├── parser.py                # 关键：将 LLM 文本指令 -> Grid2Op Action 的解析逻辑
+│   ├── prompts.py               # ADA 的 System Prompt
+│   └── const.py       # CandidateAction 类定义等共享数据结构
 
-## 工具职责划分
-
-### Planner 分析工具 (`Planner/tools/`)
-
-为 **Planner 决策** 服务，提供分析结论：
-- `grid_status_analysis`: 电网状态分析、风险评估
-- `overflow_risk_analysis`: 过载风险识别、处理建议
-- `generator_capacity_analysis`: 发电机容量分析、调度灵活性评估
-- `load_trend_analysis`: 负荷趋势分析、峰谷预测
-
-### 环境交互工具 (`env/tools.py`)
-
-与 **Grid2Op 环境** 直接交互：
-- `get_observation`: 获取原始观测数据
-- `simulate_action`: 模拟动作效果
-- `execute_action`: 执行动作
-- `get_grid_info`: 获取电网拓扑信息
-- `get_forecast`: 获取预测数据
-
-## 快速开始
-
-### 1. 安装依赖
-
-```bash
-pip install -r requirements.txt
-```
-
-### 2. 配置环境变量
-
-创建 `.env` 文件：
-
-```env
-# LLM 配置
-CLOUD_API_KEY=your-api-key-here
-CLOUD_BASE_URL=https://api.deepseek.com
-CLOUD_MODEL=deepseek-chat
-
-# Embedding 配置（可选，默认使用 LLM 配置）
-CLOUD_EMBEDDING_API_KEY=your-embedding-api-key
-CLOUD_EMBEDDING_BASE_URL=https://api.openai.com/v1
-CLOUD_EMBEDDING_MODEL=text-embedding-3-small
-```
-
-### 3. 运行示例
-
-```python
-from main import ADAOrchestrator
-from utils.const import EnvironmentState
-
-# 创建编排器
-orchestrator = ADAOrchestrator()
-
-# 定义任务
-state = EnvironmentState(
-    user_instruction="优化电网调度，最小化发电成本",
-    real_data={"total_load": 100.0}
-)
-
-# 运行
-result = orchestrator.run(state)
-
-print(f"成功: {result['success']}")
-print(f"算法: {result['solution'].algorithm_used}")
-    print(f"目标值: {result['solution'].objective_value}")
-```
-
-### 4. 与 Grid2Op 环境集成
-
-```python
-from main import ADAOrchestrator
-from env import create_grid2op_env
-
-# 方式1: 使用配置名称创建环境（推荐）
-env = create_grid2op_env("wcci_2022", seed=42)
-env.reset()
-
-# 方式2: 使用预定义配置
-from env import WCCI_2022
-env = create_grid2op_env(WCCI_2022, seed=42)
-env.reset()
-
-# 创建编排器并绑定环境
-orchestrator = ADAOrchestrator(env=env)
-
-# 运行一个回合
-result = orchestrator.run_episode(max_steps=100)
-print(f"总奖励: {result['total_reward']}")
-```
-
-#### 支持的 L2RPN 环境
-
-```python
-from env import list_env_configs, get_env_config
-
-# 列出所有可用配置
-print(list_env_configs())
-# ['neurips_2020_track1', 'neurips_2020_track2', 'icaps_2021', 'wcci_2022', 'sandbox_case14']
-
-# 获取配置信息
-config = get_env_config("wcci_2022")
-print(config.name)  # WCCI 2022 - 未来能源与碳中和
-print(config.has_storage)  # True
-```
-
-## 注意事项
-
-1. **必须配置有效的 LLM API Key**，系统不支持 Mock 模式
-2. 如果 API 额度用尽，系统会抛出异常而非静默失败
-3. 建议使用 DeepSeek 或 OpenAI 兼容的 API
-
-## 扩展指南
-
-### 添加新的分析工具
-
-```python
-from utils.interact import BaseTool
-
-class MyAnalysisTool(BaseTool):
-    @property
-    def name(self) -> str:
-        return "my_analysis"
-    
-    @property
-    def description(self) -> str:
-        return "我的分析工具"
-    
-    def execute(self, **kwargs) -> Dict[str, Any]:
-        # 实现分析逻辑
-        return {"result": "分析结论"}
-```
-
-### 添加新的求解算法
-
-```python
-from Solver.Template.base import BaseAlgorithm
-
-class MyOptimizer(BaseAlgorithm):
-    @property
-    def meta(self) -> SolverAlgorithmMeta:
-        return SolverAlgorithmMeta(
-            name="MyOptimizer",
-            capabilities={
-                "convex_handling": 0.8,
-                "non_convex_handling": 0.6,
-                "constraint_handling": 0.7,
-                "speed": 0.9,
-                "global_optimality": 0.5,
-            }
-        )
-    
-    def _solve_impl(self, problem) -> Dict[str, Any]:
-        # 实现求解逻辑
-        pass
 ```

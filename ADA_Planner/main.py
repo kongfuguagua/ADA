@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-ReAct Baseline Agent 使用示例
+ADA_Planner Baseline Agent 使用示例
 参考 OptimCVXPY 和 ExpertAgent 的 main.py
 """
 
 import sys
 from pathlib import Path
+
+from grid2op.Backend import PandaPowerBackend
 
 # 添加当前目录到路径，以便直接运行时可以导入同目录的模块
 current_dir = Path(__file__).parent
@@ -28,7 +30,7 @@ try:
 except ImportError:
     # 如果直接运行，使用绝对导入
     try:
-        from ReAct_Baseline.evaluate import evaluate
+        from ADA_Planner.evaluate import evaluate
     except ImportError:
         from evaluate import evaluate
 
@@ -38,7 +40,7 @@ if __name__ == "__main__":
     env = grid2op.make(
         "l2rpn_case14_sandbox",
         reward_class=RedispReward,
-        backend=LightSimBackend(),
+        backend=PandaPowerBackend(),
         other_rewards={
             "bridge": BridgeReward,
             "overflow": CloseToOverflowReward,
@@ -54,7 +56,7 @@ if __name__ == "__main__":
         nb_episode=7,
         verbose=True,
         save_gif=True,  # 如果需要 GIF，设置为 True（需要 l2rpn_baselines）
-        max_react_steps=3,  # ReAct 循环最大重试次数
+        max_react_steps=3,  # ADA_Planner 循环最大重试次数
         rho_danger=0.95,  # 启发式策略：当负载率超过 92% 时调用 LLM（预防性调度，避免等到过载）
         llm_temperature=0.7,
     )

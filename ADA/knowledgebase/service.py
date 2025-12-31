@@ -1,305 +1,208 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-知识库服务层
-提供统一的知识检索和更新接口
+ADA 知识库服务
+
+与顶层项目的通用 KnowledgeService 相比，这里提供一个
+轻量、无额外依赖（如 SystemConfig）的实现，专门给 ADA_Agent
+的 Judger / Summarizer 使用。
 """
 
+from __future__ import annotations
+
 import os
-import sys
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import List, Dict, Any, Optional
 
-# 添加项目根目录到路径
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from utils.const import KnowledgeItem, KnowledgeType
-from utils.interact import BaseVectorStore
-from utils.embeddings import BaseEmbeddings, OpenAIEmbedding
-from utils.llm import BaseLLM
-from config import SystemConfig
-
-from .VectorBase import VectorStore
-
+from utils.embeddings import BaseEmbeddings
+from ADA.knowledgebase.VectorBase import VectorStore
 
 class KnowledgeService:
     """
-    知识库服务
-    封装向量检索和知识管理功能
+    ADA 内部使用的知识库服务封装。
+
+    功能：
+    - 向量化存储文本经验
+    - 按相似度检索相关经验
+    - 简单的增删改查与持久化
     """
-    
+
     def __init__(
         self,
-        vector_store: VectorStore = None,
-        embedding_model: BaseEmbeddings = None,
-        llm: BaseLLM = None,
-        storage_path: str = None
-    ):
+        embedding_model: BaseEmbeddings,
+        storage_dir: Optional[str] = None,
+        top_k: int = 3,
+    ) -> None:
         """
-        初始化知识服务
-        
+        初始化知识库服务
+
         Args:
-            vector_store: 向量存储实例
-            embedding_model: Embedding 模型 (必须提供)
-            llm: LLM 模型（用于知识提炼）
-            storage_path: 持久化路径
-        
-        Raises:
-            ValueError: 未提供 embedding_model
+            embedding_model: Embedding 模型实例（必需）
+            storage_dir: 持久化目录（默认 ADA/knowledgebase/storage）
+            top_k: 默认检索返回的条数
         """
         if embedding_model is None:
-            raise ValueError("必须提供 embedding_model 参数")
-        
-        config = SystemConfig()
-        
-        self.storage_path = storage_path or str(config.get_knowledge_path())
-        self.top_k = config.knowledge_top_k
-        
-        # 初始化组件
+            raise ValueError("KnowledgeService: 必须提供 embedding_model 实例")
+
         self.embedding = embedding_model
-        self.vector_store = vector_store or VectorStore()
-        self.llm = llm
-        
+        self.vector_store = VectorStore()
+        self.top_k = int(top_k)
+
+        # 默认存储目录：ADA/knowledgebase/storage
+        default_dir = Path(__file__).parent / "storage"
+        self.storage_dir = Path(storage_dir) if storage_dir is not None else default_dir
+        os.makedirs(self.storage_dir, exist_ok=True)
+
         # 尝试加载已有数据
         self._try_load()
-    
+
+    # ------------------------------------------------------------------
+    # 基础加载 / 持久化
+    # ------------------------------------------------------------------
     def _try_load(self) -> None:
-        """尝试加载已有数据"""
-        if os.path.exists(self.storage_path):
-            try:
-                self.vector_store.load(self.storage_path)
-                print(f"已加载知识库: {len(self.vector_store)} 条记录")
-            except Exception as e:
-                print(f"加载知识库失败: {e}")
-    
-    def query_task_knowledge(
-        self, 
-        query: str, 
-        k: int = None
-    ) -> List[KnowledgeItem]:
-        """
-        检索任务知识 (TK)
-        
-        Args:
-            query: 查询文本
-            k: 返回数量
-        
-        Returns:
-            相关的任务知识列表
-        """
-        k = k or self.top_k
-        results = self.vector_store.query(
-            query, 
-            self.embedding, 
-            k=k,
-            type_filter=KnowledgeType.TK.value
-        )
-        
-        return [self._result_to_item(r, KnowledgeType.TK) for r in results]
-    
-    def query_action_knowledge(
-        self, 
-        query: str, 
-        k: int = None
-    ) -> List[KnowledgeItem]:
-        """
-        检索动作知识 (AK)
-        
-        Args:
-            query: 查询文本
-            k: 返回数量
-        
-        Returns:
-            相关的动作知识列表
-        """
-        k = k or self.top_k
-        results = self.vector_store.query(
-            query, 
-            self.embedding, 
-            k=k,
-            type_filter=KnowledgeType.AK.value
-        )
-        
-        return [self._result_to_item(r, KnowledgeType.AK) for r in results]
-    
+        """尝试从磁盘加载已有向量库（如果不存在则忽略）"""
+        try:
+            self.vector_store.load(str(self.storage_dir))
+        except Exception:
+            # 加载失败时仅打印信息，不中断主流程
+            print(f"[KnowledgeService] 无法从 {self.storage_dir} 加载现有知识库，将从空库开始。")
+
+    def persist(self) -> None:
+        """将当前内存中的向量库持久化到磁盘"""
+        self.vector_store.persist(str(self.storage_dir))
+
+    # ------------------------------------------------------------------
+    # 对外检索接口
+    # ------------------------------------------------------------------
     def query(
-        self, 
-        query: str, 
-        k: int = None,
-        knowledge_type: KnowledgeType = None
-    ) -> List[KnowledgeItem]:
+        self,
+        query: str,
+        k: Optional[int] = None,
+        knowledge_type: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         """
         通用检索接口
-        
+
         Args:
             query: 查询文本
-            k: 返回数量
-            knowledge_type: 知识类型过滤
-        
+            k: 返回条数（默认 self.top_k）
+            knowledge_type: 过滤类型（如 KnowledgeType.TK / KnowledgeType.AK）
+
         Returns:
-            相关知识列表
+            检索结果列表，每个元素包含:
+            - id: 文档 ID
+            - content: 文本内容
+            - score: 相似度
+            - metadata: 元数据（含 type 等）
         """
-        k = k or self.top_k
-        type_filter = knowledge_type.value if knowledge_type else None
-        
+        if not query:
+            return []
+
+        k = int(k or self.top_k)
+        type_filter = knowledge_type
+
         results = self.vector_store.query(
-            query, 
-            self.embedding, 
+            query=query,
+            embedding_model=self.embedding,
             k=k,
-            type_filter=type_filter
+            type_filter=type_filter,
         )
-        
-        return [self._result_to_item(r) for r in results]
-    
-    def _result_to_item(
-        self, 
-        result: Dict[str, Any],
-        default_type: KnowledgeType = KnowledgeType.TK
-    ) -> KnowledgeItem:
-        """将检索结果转换为 KnowledgeItem"""
-        metadata = result.get("metadata", {})
-        type_str = metadata.get("type", default_type.value)
-        
-        return KnowledgeItem(
-            id=result["id"],
-            type=KnowledgeType(type_str) if type_str in [t.value for t in KnowledgeType] else default_type,
-            content=result["content"],
-            metadata={**metadata, "score": result.get("score", 0.0)}
-        )
-    
-    def add_knowledge(
-        self, 
-        content: str, 
-        knowledge_type: KnowledgeType,
-        metadata: Dict[str, Any] = None
-    ) -> str:
-        """
-        添加新知识
-        
-        Args:
-            content: 知识内容
-            knowledge_type: 知识类型
-            metadata: 附加元数据
-        
-        Returns:
-            知识 ID
-        """
-        meta = metadata or {}
-        meta["type"] = knowledge_type.value
-        
-        ids = self.vector_store.add_documents(
-            [content],
-            self.embedding,
-            [meta],
-            show_progress=False
-        )
-        
-        # 持久化
-        self.persist()
-        
-        return ids[0] if ids else ""
-    
-    def update_knowledge(
-        self, 
-        item_id: str, 
-        content: str
-    ) -> bool:
-        """
-        更新知识
-        
-        Args:
-            item_id: 知识 ID
-            content: 新内容
-        
-        Returns:
-            是否更新成功
-        """
-        success = self.vector_store.update(item_id, content, self.embedding)
-        if success:
-            self.persist()
-        return success
-    
-    def delete_knowledge(self, item_id: str) -> bool:
-        """
-        删除知识
-        
-        Args:
-            item_id: 知识 ID
-        
-        Returns:
-            是否删除成功
-        """
-        success = self.vector_store.delete(item_id)
-        if success:
-            self.persist()
-        return success
-    
-    def persist(self) -> None:
-        """持久化知识库"""
-        self.vector_store.persist(self.storage_path)
-    
+        return results
+
+
     def get_context_string(
-        self, 
-        query: str, 
-        knowledge_type: KnowledgeType = None
+        self,
+        query: str,
+        knowledge_type: Optional[str] = None,
+        k: Optional[int] = None,
     ) -> str:
         """
-        获取检索结果的上下文字符串（用于 Prompt）
-        
-        Args:
-            query: 查询文本
-            knowledge_type: 知识类型过滤
-        
-        Returns:
-            格式化的上下文字符串
+        将检索结果格式化为 Prompt 友好的上下文字符串
         """
-        items = self.query(query, knowledge_type=knowledge_type)
-        
+        items = self.query(query, k=k, knowledge_type=knowledge_type)
         if not items:
             return "暂无相关知识"
-        
-        lines = []
+
+        lines: List[str] = []
         for i, item in enumerate(items, 1):
-            score = item.metadata.get("score", 0.0)
+            score = item.get("score", 0.0)
+            content = item.get("content", "")
             lines.append(f"[{i}] (相关度: {score:.2f})")
-            lines.append(f"    {item.content}")
+            lines.append(f"    {content}")
             lines.append("")
-        
+
         return "\n".join(lines)
-    
-    def batch_add_knowledge(
+
+    # ------------------------------------------------------------------
+    # 写入 / 更新 / 删除
+    # ------------------------------------------------------------------
+    def add_knowledge(
         self,
-        items: List[Dict[str, Any]]
-    ) -> List[str]:
+        content: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> str:
         """
-        批量添加知识
-        
+        添加一条知识记录
+
         Args:
-            items: 知识列表，每个元素包含 {content, type, metadata}
-        
+            content: 文本内容   
+            metadata: 额外元数据
+
         Returns:
-            知识 ID 列表
+            新增知识的 ID
         """
-        contents = []
-        metadata_list = []
-        
-        for item in items:
-            contents.append(item["content"])
-            meta = item.get("metadata", {})
-            meta["type"] = item["type"].value if isinstance(item["type"], KnowledgeType) else item["type"]
-            metadata_list.append(meta)
-        
+        if not content:
+            raise ValueError("KnowledgeService.add_knowledge: content 不能为空")
+
+        meta = dict(metadata or {})
+
         ids = self.vector_store.add_documents(
-            contents,
-            self.embedding,
-            metadata_list,
-            show_progress=True
+            [content],
+            embedding_model=self.embedding,
+            metadata_list=[meta],
+            show_progress=False,
         )
-        
+        # 持久化
         self.persist()
-        return ids
-    
-    def __len__(self) -> int:
-        return len(self.vector_store)
-    
-    def __repr__(self) -> str:
-        return f"KnowledgeService(items={len(self)}, path='{self.storage_path}')"
+        return ids[0] if ids else ""
+
+    def update_knowledge(self, item_id: str, content: str) -> bool:
+        """更新指定 ID 的知识内容"""
+        if not item_id:
+            return False
+
+        ok = self.vector_store.update(
+            doc_id=item_id,
+            content=content,
+            embedding_model=self.embedding,
+        )
+        if ok:
+            self.persist()
+        return ok
+
+    def delete_knowledge(self, item_id: str) -> bool:
+        """删除指定 ID 的知识"""
+        if not item_id:
+            return False
+
+        ok = self.vector_store.delete(item_id)
+        if ok:
+            self.persist()
+        return ok
+
+    # ------------------------------------------------------------------
+    # 兼容 Summarizer 的简易接口（降级路径）
+    # ------------------------------------------------------------------
+    def add_document(self, content: str, metadata: Optional[Dict[str, Any]] = None) -> str:
+        """
+        兼容 Summarizer._simple_store 使用的接口：
+        - 不指定 type，统一按 AK 存储
+        """
+        return self.add_knowledge(
+            content=content,
+            metadata=metadata,
+        )
+
+
+__all__ = ["KnowledgeService"]
+

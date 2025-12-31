@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-ReAct Baseline Agent 评估程序
+OptLLM Agent 评估程序
 参考 OptimCVXPY 和 ExpertAgent 的评估接口
 """
 
@@ -24,22 +24,23 @@ from grid2op.Runner import Runner
 from grid2op.Reward import RedispReward, BridgeReward, CloseToOverflowReward, DistanceReward
 from grid2op.Action import TopologyChangeAction
 
-# 导入 ReAct Agent（支持直接运行和作为模块导入）
+# 导入 OptAgent（支持直接运行和作为模块导入）
 try:
     # 如果作为模块导入，使用相对导入
-    from .agent import ReActAgent
+    from .agent import OptAgent
 except ImportError:
     # 如果直接运行，使用绝对导入
     try:
-        from ReAct_Baseline.agent import ReActAgent
+        from OptLLM.agent import OptAgent
     except ImportError:
-        from agent import ReActAgent
+        from agent import OptAgent
 
+# 导入 LLM 和日志工具
 from utils import OpenAIChat, get_logger
 
 logger = get_logger("ReActEvaluate")
 
-DEFAULT_LOGS_DIR = "./logs-eval/react-baseline"
+DEFAULT_LOGS_DIR = "./logs-eval/optllm"
 DEFAULT_NB_EPISODE = 1
 DEFAULT_NB_PROCESS = 1
 DEFAULT_MAX_STEPS = -1
@@ -47,7 +48,7 @@ DEFAULT_MAX_STEPS = -1
 
 def cli():
     """命令行参数解析"""
-    parser = argparse.ArgumentParser(description="Evaluate ReAct Baseline Agent")
+    parser = argparse.ArgumentParser(description="Evaluate OptLLM Agent")
     
     # 环境参数
     parser.add_argument("--data_dir", required=True,
@@ -85,11 +86,17 @@ def cli():
     parser.add_argument("--llm_max_tokens", type=int, default=4096,
                        help="LLM max tokens (default: 4096)")
     
-    # ReAct Agent 参数
+    # OptAgent 参数
     parser.add_argument("--max_react_steps", type=int, default=3,
-                       help="Maximum ReAct loop steps (default: 3)")
+                       help="Maximum retry steps for OptAgent (default: 3)")
     parser.add_argument("--rho_danger", type=float, default=0.92,
-                       help="Rho danger threshold for heuristic strategy (default: 0.92, call LLM when rho > 92% for preventive action)")
+                       help="Rho safe threshold for OptAgent (default: 0.92, call LLM when rho >= 92% for preventive action)")
+    
+    # 场景选择参数
+    parser.add_argument("--episode_id", type=str, default=None,
+                       help="Comma-separated list of episode IDs to run (e.g., '0,1,2' or '0-6'). If not specified, runs episodes in default order.")
+    parser.add_argument("--env_seeds", type=str, default=None,
+                       help="Comma-separated list of environment seeds (e.g., '0,1,2')")
     
     return parser.parse_args()
 
@@ -102,13 +109,16 @@ def evaluate(env,
              max_steps=DEFAULT_MAX_STEPS,
              verbose=False,
              save_gif=False,
+             # 场景选择参数
+             episode_id=None,  # 指定场景编号列表，例如 [0, 1, 2] 或 None（使用默认顺序）
+             env_seeds=None,   # 环境随机种子列表
              # LLM 参数
              llm_model=None,
              llm_api_key=None,
              llm_base_url=None,
              llm_temperature=0.7,
              llm_max_tokens=4096,
-    # ReAct Agent 参数
+    # OptAgent 参数
     max_react_steps=3,
     rho_danger=0.92,  # 修改为 0.92：在过载前进行预防性调度（原值 1.0 太晚）
              **kwargs):
@@ -127,17 +137,18 @@ def evaluate(env,
         logger.error(f"LLM 客户端创建失败: {e}")
         raise
     
-    # 创建 ReAct Agent
-    agent = ReActAgent(
+    # 创建 OptAgent
+    agent = OptAgent(
         action_space=env.action_space,
         observation_space=env.observation_space,
         llm_client=llm_client,
-        max_react_steps=max_react_steps,
-        name="ReActAgent",
-        rho_danger=rho_danger,
+        env=env,
+        max_retry_steps=max_react_steps,
+        name="OptAgent",
+        rho_safe=rho_danger,  # rho_safe: 当负载率 >= rho_safe 时调用LLM (与rho_danger语义一致)
         **kwargs
     )
-    logger.info(f"ReAct Agent 创建成功: max_react_steps={max_react_steps}")
+    logger.info(f"OptAgent 创建成功: max_retry_steps={max_react_steps}, rho_safe={rho_danger}")
     
     # 构建 Runner
     runner_params = env.get_params_for_runner()
@@ -150,12 +161,25 @@ def evaluate(env,
     # 运行评估
     os.makedirs(logs_path, exist_ok=True)
     logger.info(f"开始评估: nb_episode={nb_episode}, max_steps={max_steps}")
+    if episode_id is not None:
+        logger.info(f"指定场景编号: {episode_id}")
     
-    res = runner.run(path_save=logs_path,
-                     nb_episode=nb_episode,
-                     nb_process=nb_process,
-                     max_iter=max_steps,
-                     pbar=True)
+    # 构建 run 参数
+    run_kwargs = {
+        "path_save": logs_path,
+        "nb_episode": nb_episode,
+        "nb_process": nb_process,
+        "max_iter": max_steps,
+        "pbar": True
+    }
+    
+    # 如果指定了场景编号，添加到参数中
+    if episode_id is not None:
+        run_kwargs["episode_id"] = episode_id
+    if env_seeds is not None:
+        run_kwargs["env_seeds"] = env_seeds
+    
+    res = runner.run(**run_kwargs)
     
     # 打印摘要
     print("\n" + "=" * 60)
@@ -287,6 +311,28 @@ if __name__ == "__main__":
                            "distance": DistanceReward
                        })
     
+    # 解析 episode_id 和 env_seeds
+    episode_id = None
+    if args.episode_id:
+        try:
+            # 支持 "0,1,2" 或 "0-6" 格式
+            if '-' in args.episode_id:
+                start, end = map(int, args.episode_id.split('-'))
+                episode_id = list(range(start, end + 1))
+            else:
+                episode_id = [int(x.strip()) for x in args.episode_id.split(',')]
+        except ValueError:
+            logger.warning(f"无法解析 episode_id: {args.episode_id}，将使用默认顺序")
+            episode_id = None
+    
+    env_seeds = None
+    if args.env_seeds:
+        try:
+            env_seeds = [int(x.strip()) for x in args.env_seeds.split(',')]
+        except ValueError:
+            logger.warning(f"无法解析 env_seeds: {args.env_seeds}，将使用默认种子")
+            env_seeds = None
+    
     # 调用评估接口
     evaluate(env,
              logs_path=args.logs_dir,
@@ -295,6 +341,8 @@ if __name__ == "__main__":
              max_steps=args.max_steps,
              verbose=args.verbose,
              save_gif=args.gif,
+             episode_id=episode_id,
+             env_seeds=env_seeds,
              llm_model=args.llm_model,
              llm_api_key=args.llm_api_key,
              llm_base_url=args.llm_base_url,
