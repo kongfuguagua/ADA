@@ -25,7 +25,7 @@ logger = get_logger("ADA.make_agent")
 def make_agent(
     env: Environment,
     dir_path: Optional[os.PathLike] = None,
-    grid_name: str = "IEEE14",
+    grid_name: str = "IEEE36",  # <--- 修改默认值为 IEEE36 (原为 IEEE14)
     **kwargs
 ) -> ADA_Agent:
     """
@@ -41,7 +41,7 @@ def make_agent(
         
     grid_name : str, optional
         Grid identifier name. Used for local optimization.
-        Options: "IEEE14", "IEEE118", "IEEE118_R2". Default: "IEEE14".
+        Options: "IEEE14", "IEEE36", "IEEE118", "IEEE118_R2". Default: "IEEE36".
         
     **kwargs:
         其他参数传递给 ADA_Agent

@@ -42,8 +42,8 @@ Observation
 ```python
 import grid2op
 from lightsim2grid import LightSimBackend
-from OptLLM.hybrid_agent import HybridAgent
-from ADA import OpenAIChat
+from HybridAgent.hybrid_agent import HybridAgent
+from utils import OpenAIChat
 
 # 1. 创建环境
 env = grid2op.make(
@@ -87,15 +87,14 @@ print(stats)
 
 ### 通过 main.py 使用
 
-设置环境变量 `USE_HYBRID_AGENT=true` 来使用混合智能体：
+直接运行 HybridAgent 的 main.py：
 
 ```bash
-export USE_HYBRID_AGENT=true
 export CLOUD_API_KEY=your_api_key
 export CLOUD_BASE_URL=your_base_url
 export CLOUD_MODEL=gpt-4
 
-python OptLLM/main.py
+python HybridAgent/main.py
 ```
 
 ## 核心模块

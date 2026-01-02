@@ -6,8 +6,11 @@
 
 import re
 import json
+import logging
 from typing import Optional, Tuple, Dict, Any
 from grid2op.Action import BaseAction
+
+logger = logging.getLogger(__name__)
 
 # 导入模式配置
 try:
@@ -72,6 +75,13 @@ class ActionParser:
         if self.do_nothing_pattern.search(action_text):
             return action_space({})
         
+        # 获取线路数量用于验证
+        n_line = getattr(action_space, 'n_line', None)
+        if n_line is None:
+            # 尝试从 observation_space 获取（如果 action_space 没有）
+            if hasattr(action_space, 'observation_space'):
+                n_line = getattr(action_space.observation_space, 'n_line', None)
+        
         # 创建空动作
         action = action_space({})
         
@@ -98,6 +108,9 @@ class ActionParser:
                 try:
                     line_id = int(line_id_str)
                     status = int(status_str)
+                    # 验证线路 ID 范围
+                    if n_line is not None and (line_id < 0 or line_id >= n_line):
+                        raise ValueError(f"set_line_status 线路 ID 无效: {line_id} (有效范围: 0-{n_line-1})")
                     # 验证状态值（+1 开启，-1 关闭）
                     if status not in [-1, 1]:
                         raise ValueError(f"set_line_status 状态值无效: {status} (应为 +1 或 -1)")
@@ -372,4 +385,231 @@ class ActionParser:
             normalized["strategy_description"] = "未指定策略"
         
         return normalized
+    
+    def extract_tuning_config(self, llm_response: str) -> Optional[Dict[str, float]]:
+        """
+        从 LLM 响应中提取参数调优配置
+        
+        Args:
+            llm_response: LLM 的完整响应（应该是 JSON 格式）
+            
+        Returns:
+            配置字典，如果未找到则返回 None
+        """
+        # 方法1: 尝试解析 JSON 格式
+        try:
+            json_pattern = re.compile(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', re.DOTALL)
+            matches = json_pattern.findall(llm_response)
+            for match in matches:
+                try:
+                    data = json.loads(match)
+                    
+                    # 检查是否包含调优参数
+                    if "margin_th_limit" in data or "penalty_curtailment" in data:
+                        config = {}
+                        if "margin_th_limit" in data:
+                            config["margin_th_limit"] = float(data["margin_th_limit"])
+                        if "penalty_curtailment" in data:
+                            config["penalty_curtailment"] = float(data["penalty_curtailment"])
+                        if "penalty_redispatch" in data:
+                            config["penalty_redispatch"] = float(data["penalty_redispatch"])
+                        if "penalty_storage" in data:
+                            config["penalty_storage"] = float(data["penalty_storage"])
+                        
+                        if config:
+                            return config
+                except json.JSONDecodeError:
+                    continue
+        except Exception:
+            pass
+        
+        # 方法2: 从文本中提取参数
+        config = {}
+        
+        # 提取 margin_th_limit
+        mtl_patterns = [
+            r'"margin_th_limit"\s*:\s*([0-9.]+)',
+            r'margin_th_limit[:\s=]+([0-9.]+)',
+        ]
+        for pattern in mtl_patterns:
+            match = re.search(pattern, llm_response, re.IGNORECASE)
+            if match:
+                try:
+                    config["margin_th_limit"] = float(match.group(1))
+                    break
+                except (ValueError, IndexError):
+                    continue
+        
+        # 提取 penalty_curtailment
+        pc_patterns = [
+            r'"penalty_curtailment"\s*:\s*([0-9.]+)',
+            r'penalty_curtailment[:\s=]+([0-9.]+)',
+        ]
+        for pattern in pc_patterns:
+            match = re.search(pattern, llm_response, re.IGNORECASE)
+            if match:
+                try:
+                    config["penalty_curtailment"] = float(match.group(1))
+                    break
+                except (ValueError, IndexError):
+                    continue
+        
+        # 提取 penalty_redispatch
+        pr_patterns = [
+            r'"penalty_redispatch"\s*:\s*([0-9.]+)',
+            r'penalty_redispatch[:\s=]+([0-9.]+)',
+        ]
+        for pattern in pr_patterns:
+            match = re.search(pattern, llm_response, re.IGNORECASE)
+            if match:
+                try:
+                    config["penalty_redispatch"] = float(match.group(1))
+                    break
+                except (ValueError, IndexError):
+                    continue
+        
+        # 提取 penalty_storage
+        ps_patterns = [
+            r'"penalty_storage"\s*:\s*([0-9.]+)',
+            r'penalty_storage[:\s=]+([0-9.]+)',
+        ]
+        for pattern in ps_patterns:
+            match = re.search(pattern, llm_response, re.IGNORECASE)
+            if match:
+                try:
+                    config["penalty_storage"] = float(match.group(1))
+                    break
+                except (ValueError, IndexError):
+                    continue
+        
+        return config if config else None
+    
+    def parse_topology_action(
+        self,
+        action_text: str,
+        action_space
+    ) -> Optional[BaseAction]:
+        """
+        解析拓扑动作
+        
+        Args:
+            action_text: LLM 生成的拓扑动作文本
+            action_space: Grid2Op 动作空间
+            
+        Returns:
+            Grid2Op Action 对象，如果解析失败则返回 None
+        """
+        # 清理文本
+        action_text = action_text.strip()
+        
+        # 检查是否为 do_nothing
+        if self.do_nothing_pattern.search(action_text):
+            return action_space({})
+        
+        # 获取线路数量用于验证
+        n_line = getattr(action_space, 'n_line', None)
+        if n_line is None:
+            # 尝试从 observation_space 获取（如果 action_space 没有）
+            if hasattr(action_space, 'observation_space'):
+                n_line = getattr(action_space.observation_space, 'n_line', None)
+        
+        # 创建空动作
+        action = action_space({})
+        
+        # 方法1: 尝试解析 JSON 格式
+        try:
+            json_pattern = re.compile(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', re.DOTALL)
+            matches = json_pattern.findall(action_text)
+            for match in matches:
+                try:
+                    data = json.loads(match)
+                    if "actions" in data and isinstance(data["actions"], list):
+                        for act in data["actions"]:
+                            if act.get("type") == "set_line_status":
+                                line_id = int(act.get("line_id"))
+                                status = int(act.get("status"))
+                                # 验证线路 ID 范围
+                                if n_line is not None and (line_id < 0 or line_id >= n_line):
+                                    logger.warning(f"跳过无效的线路 ID: {line_id} (有效范围: 0-{n_line-1})")
+                                    continue  # 跳过无效的线路 ID
+                                if status in [-1, 1]:
+                                    if not hasattr(action, 'set_line_status') or action.set_line_status is None:
+                                        action.set_line_status = []
+                                    action.set_line_status.append((line_id, status))
+                        if hasattr(action, 'set_line_status') and action.set_line_status:
+                            return action
+                except (json.JSONDecodeError, KeyError, ValueError):
+                    continue
+        except Exception:
+            pass
+        
+        # 方法2: 解析文本格式（set_line_status, set_bus, change_bus）
+        has_action = False
+        
+        # 解析 set_line_status
+        line_status_matches = self.set_line_status_pattern.findall(action_text)
+        if line_status_matches:
+            line_status_list = []
+            for line_id_str, status_str in line_status_matches:
+                try:
+                    line_id = int(line_id_str)
+                    status = int(status_str)
+                    # 验证线路 ID 范围
+                    if n_line is not None and (line_id < 0 or line_id >= n_line):
+                        logger.warning(f"跳过无效的线路 ID: {line_id} (有效范围: 0-{n_line-1})")
+                        continue  # 跳过无效的线路 ID
+                    if status not in [-1, 1]:
+                        continue
+                    line_status_list.append((line_id, status))
+                    has_action = True
+                except (ValueError, TypeError):
+                    continue
+            
+            if line_status_list:
+                action.set_line_status = line_status_list
+        
+        # 解析 set_bus (格式: set_bus(substation_id, bus_id))
+        set_bus_pattern = re.compile(
+            r'set_bus\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)',
+            re.IGNORECASE
+        )
+        set_bus_matches = set_bus_pattern.findall(action_text)
+        if set_bus_matches:
+            set_bus_list = []
+            for sub_id_str, bus_id_str in set_bus_matches:
+                try:
+                    sub_id = int(sub_id_str)
+                    bus_id = int(bus_id_str)
+                    if bus_id in [1, 2]:
+                        set_bus_list.append((sub_id, bus_id))
+                        has_action = True
+                except (ValueError, TypeError):
+                    continue
+            
+            if set_bus_list:
+                action.set_bus = set_bus_list
+        
+        # 解析 change_bus (格式: change_bus(substation_id))
+        change_bus_pattern = re.compile(
+            r'change_bus\s*\(\s*(\d+)\s*\)',
+            re.IGNORECASE
+        )
+        change_bus_matches = change_bus_pattern.findall(action_text)
+        if change_bus_matches:
+            change_bus_list = []
+            for sub_id_str in change_bus_matches:
+                try:
+                    sub_id = int(sub_id_str)
+                    change_bus_list.append(sub_id)
+                    has_action = True
+                except (ValueError, TypeError):
+                    continue
+            
+            if change_bus_list:
+                action.change_bus = change_bus_list
+        
+        if has_action:
+            return action
+        
+        return None
 

@@ -72,7 +72,9 @@ agent = ReActAgent(
     observation_space=env.observation_space,
     llm_client=llm_client,
     max_react_steps=3,  # ReAct 循环最大重试次数
-    name="ReActAgent"
+    name="ReActAgent",
+    enable_rag=True,  # 启用 RAG 功能（默认 True）
+    knowledge_path=None  # 知识库路径，None 则使用 ADA/knowledgebase/storage
 )
 
 # 4. 运行
@@ -92,6 +94,7 @@ while not done:
 5. **缓解策略支持**: 允许渐进式改善，不要求一步到位完全消除过载（v2.0 新增）
 6. **预防性调度**: 默认在负载率达到 92% 时开始介入，避免等到过载（v2.0 新增）
 7. **拓扑感知**: 提供发电机和线路的拓扑信息（变电站连接），帮助 LLM 做出更合理的调度决策（v2.0 新增）
+8. **RAG 增强**: 集成 ADA 知识库，在决策前检索相似历史场景，提供参考策略（v2.1 新增）
 
 ## 工作流程
 
@@ -115,7 +118,39 @@ while not done:
 ### Agent 参数
 - `max_react_steps`: ReAct 循环的最大重试次数（默认 3）
 - `rho_danger`: 危险阈值，当最大负载率超过此值时才调用 LLM（默认 0.92，即负载率 > 92% 时介入）
+- `rho_safe`: 安全阈值，当最大负载率低于此值时直接返回 do_nothing（默认 0.80，即负载率 < 80% 时提前终止）
+- `min_redispatch_threshold`: 动作剪枝阈值，小于此值的 redispatch 将被过滤（默认 0.5 MW）
 - `llm_client`: LLM 客户端（必须提供 OpenAIChat 实例）
+- `enable_rag`: 是否启用 RAG 功能（默认 True）
+- `knowledge_path`: 知识库存储路径（默认使用 `ADA/knowledgebase/storage`）
+- `config`: 配置字典，可以一次性设置多个参数（可选）
+
+### 配置示例
+
+```python
+# 使用默认配置
+agent = ReActAgent(..., enable_rag=True)
+
+# 自定义配置
+agent = ReActAgent(
+    ...,
+    rho_danger=0.95,  # 更保守的阈值
+    rho_safe=0.75,   # 更激进的提前终止
+    min_redispatch_threshold=1.0,  # 更大的剪枝阈值
+    enable_rag=True
+)
+
+# 使用配置字典
+agent = ReActAgent(
+    ...,
+    config={
+        "rho_danger": 0.95,
+        "rho_safe": 0.75,
+        "min_redispatch_threshold": 1.0,
+        "rag_top_k": 3  # RAG 检索返回 3 条
+    }
+)
+```
 
 ### 评估程序参数
 - `--data_dir`: 环境名称或路径（必需）
@@ -131,7 +166,51 @@ while not done:
 - `--max_react_steps`: ReAct 循环最大重试次数（默认 3）
 - `--rho_danger`: 危险阈值（默认 0.92，即负载率 > 92% 时调用 LLM）
 
-## 重要改进（v2.0）
+## 重要改进
+
+### v2.1 深度优化（最新）
+
+#### 1. RAG 预验证机制
+- **历史动作预仿真**：在将 RAG 检索到的历史经验发给 LLM 之前，先进行预仿真验证
+- **智能标注**：如果历史动作在当前环境下安全，标注为"强烈推荐"；如果不可行，标注为"仅参考思路"
+- **上下文压缩**：只在第一轮 ReAct 注入 RAG 上下文，后续步骤不再重复，大幅节省 Token
+
+#### 2. 量化仿真反馈
+- **详细反馈**：`_simulate_action` 现在返回详细的量化反馈，包括：
+  - 负载率变化量（delta_rho）
+  - 过载线路数量变化
+  - 方向性指导（"方向正确但力度不够" vs "方向错误"）
+- **智能提示**：LLM 可以知道"虽然失败了，但离成功还有多远"
+
+#### 3. 语义增强的 RAG 检索
+- **过载严重程度描述**：根据负载率自动分类为 "Severe/Moderate/Slight overload"
+- **过载线路数量描述**：区分单线路、少量线路、多线路过载
+- **混合特征**：结合语义描述和具体 Line ID，提高检索命中率
+
+#### 4. 动作剪枝（Action Pruning）
+- **过滤微小调整**：自动过滤掉小于阈值（默认 0.5 MW）的 redispatch 操作
+- **NaN/None 处理**：增强了对异常值的处理
+- **提升效率**：避免浪费步骤在无效的微小调整上
+
+#### 5. 奖励感知的 Prompt
+- **最小干预原则**：明确要求优先选择调整量最小、操作步数最少的方案
+- **Token 节约**：引导 LLM 在自信时直接输出 Action，无需冗长描述
+
+#### 6. 配置抽象
+- **统一配置管理**：所有硬编码参数提取到 `DEFAULT_CONFIG`
+- **灵活配置**：支持通过参数或配置字典自定义所有阈值
+- **便捷访问**：常用配置可通过属性直接访问
+
+#### 7. 提前终止优化
+- **双重阈值**：`rho_safe`（0.80）用于提前终止，`rho_danger`（0.92）用于预防性调度
+- **节省资源**：系统非常安全时直接返回 do_nothing，跳过 LLM 调用
+
+#### 8. 历史压缩
+- **自动压缩**：当 ReAct 步数超过 2 步时，自动压缩历史对话
+- **保留关键信息**：只保留最近的 2 轮对话，之前的摘要化处理
+- **Token 优化**：大幅减少长对话场景下的 Token 消耗
+
+### v2.0 改进
 
 ### 1. 缓解策略（Mitigation Strategy）
 解决了"完美主义陷阱"问题：当电网已经过载时，系统会接受**缓解性动作**：
@@ -152,11 +231,42 @@ while not done:
 - LLM 可以利用拓扑关系做出更合理的调度决策
 - 例如：调整与过载线路连接的变电站附近的发电机出力
 
+## RAG 功能说明（v2.1）
+
+ReAct Agent 现在集成了 ADA 的知识库模块，能够在决策前检索相似的历史场景：
+
+### 工作原理
+
+1. **检索阶段**: 在每次 `act()` 调用时，根据当前观测（过载线路、负载率等）构建查询，从知识库中检索相似历史场景
+2. **增强阶段**: 将检索到的历史经验注入到 System Prompt 中，作为 LLM 的参考上下文
+3. **生成阶段**: LLM 参考历史经验生成指令，经由现有的仿真模块验证后执行
+
+### 使用要求
+
+- 需要配置 Embedding API（通过环境变量 `OPENAI_API_KEY` 和 `OPENAI_BASE_URL`）
+- 知识库路径默认指向 `ADA/knowledgebase/storage`，确保该路径存在且包含知识库数据
+- 如果 ADA 知识库不存在或 RAG 初始化失败，Agent 会自动降级为纯 LLM 模式（不启用 RAG）
+
+### 配置示例
+
+```python
+# 启用 RAG（默认）
+agent = ReActAgent(..., enable_rag=True)
+
+# 禁用 RAG
+agent = ReActAgent(..., enable_rag=False)
+
+# 使用自定义知识库路径
+agent = ReActAgent(..., knowledge_path="/path/to/custom/knowledge/storage")
+```
+
 ## 注意事项
 
 - 需要配置 LLM API Key（通过环境变量或命令行参数）
+- 如果启用 RAG，还需要配置 Embedding API（`OPENAI_API_KEY` 和 `OPENAI_BASE_URL`）
 - 动作解析使用正则表达式，要求 LLM 严格按照格式输出
 - 如果多次重试后仍无法找到安全动作，会返回 `do_nothing()`
 - 评估程序会自动统计 Agent 的性能指标（成功率、平均 ReAct 循环次数等）
 - **新版本行为变化**：Agent 可能会连续多步进行再调度，逐步缓解过载，这是正常且期望的行为
+- **RAG 注意事项**：LLM 会批判性地参考历史经验，但仍需通过仿真验证，避免盲目照抄历史动作
 

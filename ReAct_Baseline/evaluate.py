@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 ReAct Baseline Agent 评估程序
-参考 OptimCVXPY 和 ExpertAgent 的评估接口
 """
 
 import os
@@ -91,6 +90,14 @@ def cli():
     parser.add_argument("--rho_danger", type=float, default=0.92,
                        help="Rho danger threshold for heuristic strategy (default: 0.92, call LLM when rho > 92% for preventive action)")
     
+    # RAG 参数
+    parser.add_argument("--enable_rag", action='store_true', default=True,
+                       help="Enable RAG (Retrieval-Augmented Generation) feature (default: True)")
+    parser.add_argument("--disable_rag", action='store_true',
+                       help="Disable RAG feature")
+    parser.add_argument("--knowledge_path", type=str, default=None,
+                       help="Path to knowledge base storage (default: ADA/knowledgebase/storage)")
+    
     return parser.parse_args()
 
 
@@ -108,9 +115,12 @@ def evaluate(env,
              llm_base_url=None,
              llm_temperature=0.7,
              llm_max_tokens=4096,
-    # ReAct Agent 参数
-    max_react_steps=3,
-    rho_danger=0.92,  # 修改为 0.92：在过载前进行预防性调度（原值 1.0 太晚）
+            # ReAct Agent 参数
+            max_react_steps=3,
+            rho_danger=0.92,  # 修改为 0.92：在过载前进行预防性调度（原值 1.0 太晚）
+            # RAG 参数
+            enable_rag=True,
+            knowledge_path=None,
              **kwargs):
              
     # 创建 LLM 客户端
@@ -135,6 +145,8 @@ def evaluate(env,
         max_react_steps=max_react_steps,
         name="ReActAgent",
         rho_danger=rho_danger,
+        enable_rag=enable_rag,
+        knowledge_path=knowledge_path,
         **kwargs
     )
     logger.info(f"ReAct Agent 创建成功: max_react_steps={max_react_steps}")
@@ -287,6 +299,9 @@ if __name__ == "__main__":
                            "distance": DistanceReward
                        })
     
+    # 处理 RAG 参数
+    enable_rag = args.enable_rag and not args.disable_rag
+    
     # 调用评估接口
     evaluate(env,
              logs_path=args.logs_dir,
@@ -301,5 +316,7 @@ if __name__ == "__main__":
              llm_temperature=args.llm_temperature,
              llm_max_tokens=args.llm_max_tokens,
              max_react_steps=args.max_react_steps,
-             rho_danger=args.rho_danger)
+             rho_danger=args.rho_danger,
+             enable_rag=enable_rag,
+             knowledge_path=args.knowledge_path)
 

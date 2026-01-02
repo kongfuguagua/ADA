@@ -87,10 +87,12 @@ def cli():
                        help="LLM max tokens (default: 4096)")
     
     # OptAgent 参数
-    parser.add_argument("--max_react_steps", type=int, default=3,
-                       help="Maximum retry steps for OptAgent (default: 3)")
-    parser.add_argument("--rho_danger", type=float, default=0.92,
-                       help="Rho safe threshold for OptAgent (default: 0.92, call LLM when rho >= 92% for preventive action)")
+    parser.add_argument("--llm_trigger_rho", type=float, default=0.95,
+                       help="LLM trigger threshold for OptAgent (default: 0.95, call LLM when rho >= 95%)")
+    parser.add_argument("--rho_safe", type=float, default=0.85,
+                       help="Rho safe threshold for OptimCVXPY (default: 0.85)")
+    parser.add_argument("--rho_danger", type=float, default=0.95,
+                       help="Rho danger threshold for OptimCVXPY (default: 0.95)")
     
     # 场景选择参数
     parser.add_argument("--episode_id", type=str, default=None,
@@ -119,8 +121,9 @@ def evaluate(env,
              llm_temperature=0.7,
              llm_max_tokens=4096,
     # OptAgent 参数
-    max_react_steps=3,
-    rho_danger=0.92,  # 修改为 0.92：在过载前进行预防性调度（原值 1.0 太晚）
+    llm_trigger_rho=0.95,  # LLM 激活阈值
+    rho_safe=0.85,  # OptimCVXPY 安全阈值
+    rho_danger=0.95,  # OptimCVXPY 危险阈值
              **kwargs):
              
     # 创建 LLM 客户端
@@ -141,14 +144,14 @@ def evaluate(env,
     agent = OptAgent(
         action_space=env.action_space,
         observation_space=env.observation_space,
-        llm_client=llm_client,
         env=env,
-        max_retry_steps=max_react_steps,
-        name="OptAgent",
-        rho_safe=rho_danger,  # rho_safe: 当负载率 >= rho_safe 时调用LLM (与rho_danger语义一致)
+        llm_client=llm_client,
+        llm_trigger_rho=llm_trigger_rho,
+        rho_safe=rho_safe,
+        rho_danger=rho_danger,
         **kwargs
     )
-    logger.info(f"OptAgent 创建成功: max_retry_steps={max_react_steps}, rho_safe={rho_danger}")
+    logger.info(f"OptAgent 创建成功: llm_trigger_rho={llm_trigger_rho}, rho_safe={rho_safe}, rho_danger={rho_danger}")
     
     # 构建 Runner
     runner_params = env.get_params_for_runner()

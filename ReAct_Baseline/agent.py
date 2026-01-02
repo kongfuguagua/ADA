@@ -33,15 +33,41 @@ except ImportError:
 
 # 尝试导入 ADA 的工具
 from utils import OpenAIChat, get_logger
+from utils.embeddings import OpenAIEmbedding
+
+# 尝试导入 ADA 的知识库服务
+try:
+    from ADA.knowledgebase.service import KnowledgeService
+    RAG_AVAILABLE = True
+except ImportError:
+    RAG_AVAILABLE = False
 
 logger = get_logger("ReActAgent")
+
+if not RAG_AVAILABLE:
+    logger.warning("RAG 功能不可用：无法导入 KnowledgeService")
 
 
 class ReActAgent(BaseAgent):
     """
-    ReAct Baseline Agent (Enhanced)
-    修复了模拟验证逻辑 BUG，并增加了自动修正（Auto-Correction）功能。
+    ReAct Baseline Agent (Enhanced v2.1)
+    
+    主要改进：
+    1. RAG 集成与预验证
+    2. 量化仿真反馈
+    3. 动作剪枝
+    4. 上下文压缩
+    5. 配置抽象
     """
+    
+    # 默认配置
+    DEFAULT_CONFIG = {
+        "rho_danger": 0.92,  # 危险阈值（预防性调度）
+        "rho_safe": 0.80,    # 安全阈值（提前终止）
+        "min_redispatch_threshold": 0.5,  # 动作剪枝阈值（MW）
+        "rag_top_k": 2,  # RAG 检索返回条数
+        "enable_rag": True,
+    }
     
     def __init__(
         self,
@@ -50,7 +76,11 @@ class ReActAgent(BaseAgent):
         llm_client: OpenAIChat,
         max_react_steps: int = 3,
         name: str = "ReActAgent",
-        rho_danger: float = 0.92, # 降低默认阈值以实现预防性调度
+        rho_danger: float = None,
+        rho_safe: float = None,
+        min_redispatch_threshold: float = None,
+        enable_rag: bool = True,
+        knowledge_path: Optional[str] = None,
         **kwargs
     ):
         super().__init__(action_space)
@@ -58,7 +88,25 @@ class ReActAgent(BaseAgent):
         self.observation_space = observation_space
         self.llm_client = llm_client
         self.max_react_steps = max_react_steps
-        self.rho_danger = rho_danger
+        
+        # 配置管理（使用传入值或默认值）
+        self.config = self.DEFAULT_CONFIG.copy()
+        self.config.update(kwargs.get("config", {}))
+        if rho_danger is not None:
+            self.config["rho_danger"] = rho_danger
+        if rho_safe is not None:
+            self.config["rho_safe"] = rho_safe
+        if min_redispatch_threshold is not None:
+            self.config["min_redispatch_threshold"] = min_redispatch_threshold
+        if "enable_rag" in kwargs:
+            self.config["enable_rag"] = kwargs["enable_rag"]
+        else:
+            self.config["enable_rag"] = enable_rag
+        
+        # 便捷访问常用配置
+        self.rho_danger = self.config["rho_danger"]
+        self.rho_safe = self.config["rho_safe"]
+        self.min_redispatch_threshold = self.config["min_redispatch_threshold"]
         
         self.formatter = ObservationFormatter()
         self.parser = ActionParser()
@@ -77,7 +125,29 @@ class ReActAgent(BaseAgent):
             "sanitized_count": 0, # 统计自动修正次数
         }
         
-        logger.info(f"ReActAgent '{name}' 初始化完成 (v2.0 Fix)")
+        # RAG 初始化
+        self.enable_rag = self.config["enable_rag"] and RAG_AVAILABLE
+        self.knowledge_base = None
+        if self.enable_rag and self.llm_client:
+            try:
+                # 复用 ADA 的 Embedding 和 Storage 逻辑
+                embedding = OpenAIEmbedding()
+                # 默认指向 ADA 的存储路径，或者传入特定路径
+                default_storage = Path(__file__).parent.parent / "ADA" / "knowledgebase" / "storage"
+                storage_dir = knowledge_path if knowledge_path else str(default_storage)
+                
+                self.knowledge_base = KnowledgeService(
+                    embedding_model=embedding,
+                    storage_dir=storage_dir,
+                    top_k=self.config["rag_top_k"]
+                )
+                logger.info(f"ReAct RAG 模块已启用，加载路径: {storage_dir}")
+            except Exception as e:
+                logger.warning(f"RAG 初始化失败: {e}")
+                self.enable_rag = False
+                self.knowledge_base = None
+        
+        logger.info(f"ReActAgent '{name}' 初始化完成 (v2.0 Fix, RAG: {'Enabled' if self.enable_rag else 'Disabled'})")
     
     def reset(self, observation: BaseObservation):
         self.current_step = 0
@@ -88,19 +158,145 @@ class ReActAgent(BaseAgent):
         self.stats = {k: 0 for k in self.stats}
         logger.info(f"ReActAgent 已重置")
     
+    def _build_rag_query(self, observation: BaseObservation) -> str:
+        """
+        构建检索查询语句（语义增强版本）
+        
+        改进点：
+        1. 增加过载严重程度描述（High/Medium/Low）
+        2. 增加过载线路数量描述
+        3. 结合语义描述和具体 Line ID
+        
+        Args:
+            observation: Grid2Op Observation 对象
+            
+        Returns:
+            查询字符串
+        """
+        rho = observation.rho
+        overloaded_lines = np.where(rho >= 1.0)[0]
+        max_rho = np.max(rho) if len(rho) > 0 else 0
+        
+        parts = []
+        
+        # 1. 过载严重程度描述（语义特征）
+        if len(overloaded_lines) > 0:
+            if max_rho >= 1.2:
+                severity = "Severe overload (>120%)"
+            elif max_rho >= 1.1:
+                severity = "Moderate overload (110-120%)"
+            else:
+                severity = "Slight overload (100-110%)"
+            
+            if len(overloaded_lines) == 1:
+                parts.append(f"{severity} on single line")
+            elif len(overloaded_lines) <= 3:
+                parts.append(f"{severity} on {len(overloaded_lines)} lines")
+            else:
+                parts.append(f"{severity} on multiple lines ({len(overloaded_lines)} lines)")
+            
+            # 保留具体的 Line ID（Grid2Op 中 ID 是固定的，这是强特征）
+            parts.append(f"Overloaded lines: {overloaded_lines.tolist()}")
+        else:
+            # 无过载但接近危险阈值
+            if max_rho >= 0.95:
+                parts.append(f"Near-overload condition (max rho: {max_rho:.2%})")
+            else:
+                parts.append(f"Safe condition (max rho: {max_rho:.2%})")
+        
+        # 2. 负载率信息
+        parts.append(f"Max load rate: {max_rho:.2%}")
+        
+        # 3. 功率平衡信息
+        total_gen = np.sum(observation.prod_p)
+        total_load = np.sum(observation.load_p)
+        parts.append(f"Power balance: {total_gen:.1f} MW / {total_load:.1f} MW")
+        
+        return "; ".join(parts)
+    
+    def _pre_validate_rag_context(self, rag_context: str, observation: BaseObservation) -> str:
+        """
+        RAG 预验证：在发给 LLM 之前，验证历史动作在当前环境下的安全性
+        
+        Args:
+            rag_context: RAG 检索到的原始上下文
+            observation: 当前观测
+            
+        Returns:
+            增强后的 RAG 上下文（包含预验证结果）
+        """
+        try:
+            # 尝试从 RAG 上下文中提取历史动作
+            history_action_text = self.parser.extract_action_from_text(rag_context)
+            
+            if not history_action_text:
+                # 如果无法提取动作，直接返回原上下文
+                return rag_context
+            
+            # 解析历史动作
+            try:
+                history_action = self.parser.parse(history_action_text, self.action_space)
+            except ValueError:
+                # 解析失败，返回原上下文
+                return rag_context
+            
+            # 对历史动作进行预仿真
+            is_safe, feedback = self._simulate_action(history_action, observation)
+            
+            # 在 RAG 上下文末尾添加预验证结果
+            if is_safe:
+                validation_note = f"\n\n[系统提示]: 上述历史经验中的动作经当前仿真验证【有效且安全】({feedback})，建议优先采纳。"
+            else:
+                validation_note = f"\n\n[系统警告]: 上述历史经验中的动作在当前场景下【不可行】({feedback})，请仅参考思路，需重新规划动作。"
+            
+            return rag_context + validation_note
+            
+        except Exception as e:
+            logger.warning(f"RAG 预验证失败: {e}")
+            return rag_context
+    
     def act(self, observation: BaseObservation, reward: float = 0.0, done: bool = False) -> BaseAction:
         self.current_step += 1
         self.stats["total_steps"] += 1
         
-        # 0. 启发式策略
+        # 0. 启发式策略（提前终止优化）
         max_rho = float(observation.rho.max())
         overflow_count = int((observation.rho > 1.0).sum())
         
+        # 提前终止：如果系统非常安全，直接返回 do_nothing（跳过 LLM 调用）
+        if overflow_count == 0 and max_rho <= self.rho_safe:
+            self.stats["do_nothing_count"] += 1
+            return self.action_space({})
+        
+        # 预防性调度：如果接近危险阈值但未过载，仍需要 LLM 介入
         if overflow_count == 0 and max_rho <= self.rho_danger:
             self.stats["do_nothing_count"] += 1
             return self.action_space({})
         
-        # 1. 准备 ReAct
+        # 1. RAG 检索 (在 ReAct 循环之前)
+        rag_context = ""
+        if self.enable_rag and self.knowledge_base:
+            try:
+                query = self._build_rag_query(observation)
+                rag_context = self.knowledge_base.get_context_string(query)
+                logger.debug(f"RAG Context retrieved: {len(rag_context)} chars")
+                
+                # RAG 预验证：提取历史动作并进行预仿真
+                if rag_context and rag_context != "暂无相关知识":
+                    rag_context = self._pre_validate_rag_context(rag_context, observation)
+                    
+            except Exception as e:
+                logger.error(f"RAG retrieval failed: {e}")
+        
+        # 2. 设置 RAG 上下文到 PromptManager（只在第一轮 ReAct 注入）
+        is_first_react = len(self.react_history) == 0
+        if is_first_react:
+            self.prompt_manager.set_rag_context(rag_context)
+        else:
+            # 后续 ReAct 步骤不再注入 RAG，节省 Token
+            self.prompt_manager.set_rag_context("")
+        
+        # 3. 准备 ReAct
         obs_text = self.formatter.format(observation)
         is_first_call = len(self.react_history) == 0
         history = self.prompt_manager.build(obs_text, self.react_history if not is_first_call else None)
@@ -149,12 +345,22 @@ class ReActAgent(BaseAgent):
                             
                         self.react_history.append({"role": "assistant", "content": llm_response})
                         self.react_history = self.prompt_manager.add_observation_feedback(self.react_history, feedback_msg)
+                        
+                        # 如果 ReAct 步数过多，压缩历史以节省 Token
+                        if react_step >= 2:
+                            self.react_history = self.prompt_manager.compress_history(self.react_history, max_preserved=2)
+                        
                         history = self.prompt_manager.build(obs_text, self.react_history)
                         continue
                         
                 except ValueError as e:
                     self.react_history.append({"role": "assistant", "content": llm_response})
                     self.react_history = self.prompt_manager.add_observation_feedback(self.react_history, f"格式错误: {e}")
+                    
+                    # 如果 ReAct 步数过多，压缩历史
+                    if react_step >= 2:
+                        self.react_history = self.prompt_manager.compress_history(self.react_history, max_preserved=2)
+                    
                     history = self.prompt_manager.build(obs_text, self.react_history)
                     continue
                     
@@ -171,13 +377,20 @@ class ReActAgent(BaseAgent):
 
     def _sanitize_action(self, action: BaseAction, observation: BaseObservation) -> tuple[BaseAction, str]:
         """
-        自动修正动作：
-        1. 检查 Redispatch 是否超过爬坡率，如果超过则截断。
-        2. 剔除对不可调度发电机的操作。
+        自动修正动作（增强版：包含动作剪枝）
+        
+        改进点：
+        1. 检查 Redispatch 是否超过爬坡率，如果超过则截断
+        2. 剔除对不可调度发电机的操作
+        3. 过滤微小调整（动作剪枝）：过滤掉对奖励无益的微小 redispatch（< 0.5 MW）
+        4. 处理 None 值和 NaN 值
         """
         correction_details = []
         action_dict = action.as_dict()
         modified = False
+        
+        # 动作剪枝阈值：小于此值的 redispatch 将被过滤
+        MIN_REDISPATCH_THRESHOLD = self.min_redispatch_threshold
         
         # 1. 修正 Redispatch
         if 'redispatch' in action_dict and action_dict['redispatch'] is not None:
@@ -187,18 +400,24 @@ class ReActAgent(BaseAgent):
             # 转换为 list of (id, amount)
             items = []
             if isinstance(redispatch_data, dict):
-                items = [(int(k), float(v)) for k, v in redispatch_data.items()]
+                items = [(int(k), float(v)) for k, v in redispatch_data.items() if v is not None]
             elif hasattr(redispatch_data, '__iter__') and not isinstance(redispatch_data, str):
                 try:
                     # 处理 numpy array 或 list
-                    # 注意: grid2op 的 redispatch 数组通常包含所有发电机，非零即为操作
                     for i, val in enumerate(redispatch_data):
-                        if abs(val) > 1e-6:
-                            items.append((i, float(val)))
+                        # 过滤 None 和 NaN
+                        if val is not None and not (isinstance(val, float) and (np.isnan(val) or np.isinf(val))):
+                            if abs(float(val)) > 1e-6:
+                                items.append((i, float(val)))
                 except:
                     pass
 
             for gen_id, amount in items:
+                # 动作剪枝：过滤微小调整
+                if abs(amount) < MIN_REDISPATCH_THRESHOLD:
+                    correction_details.append(f"忽略发电机 {gen_id} 的微小调整 ({amount:.2f} MW < {MIN_REDISPATCH_THRESHOLD} MW 阈值)")
+                    modified = True
+                    continue
                 # 检查是否可调度
                 if hasattr(observation, 'gen_redispatchable') and not observation.gen_redispatchable[gen_id]:
                     correction_details.append(f"忽略发电机 {gen_id} (不可调度)")
@@ -247,24 +466,28 @@ class ReActAgent(BaseAgent):
 
     def _simulate_action(self, action: BaseAction, observation: BaseObservation) -> tuple[bool, str]:
         """
-        模拟验证 (修复了 BUG：空异常列表不再视为失败)
+        模拟验证（增强版：返回详细的量化反馈）
+        
+        改进点：
+        1. 返回详细的负载率变化信息
+        2. 提供方向性反馈（方向正确但力度不够 vs 方向错误）
+        3. 识别具体过载线路的变化
+        
+        Returns:
+            (is_safe: bool, feedback: str)
         """
         try:
             sim_obs, sim_reward, sim_done, sim_info = observation.simulate(action, time_step=0)
             
             # === BUG FIX START ===
             # 检查异常：Grid2Op 在成功时返回 'exception': [] (空列表)
-            # 旧代码错误地认为 if exception is not None 就一定是有错
             exception = sim_info.get('exception', None)
             if exception is not None:
                 if isinstance(exception, list):
                     if len(exception) > 0:
-                        # 真正的异常发生
                         err_strs = [str(e) for e in exception]
                         return False, f"动作不合法: {'; '.join(err_strs)}"
-                    # else: 空列表 = 成功！不要返回 False！
                 else:
-                    # 单个异常对象
                     return False, f"动作不合法: {str(exception)}"
             # === BUG FIX END ===
 
@@ -272,35 +495,70 @@ class ReActAgent(BaseAgent):
             if np.any(np.isnan(sim_obs.rho)) or np.any(np.isinf(sim_obs.rho)):
                 return False, "模拟失败：潮流发散 (NaN/Inf)"
             
-            # 1. 安全检查 (熔断机制)
-            max_rho_after = float(sim_obs.rho.max())
+            # 量化分析
+            rho_before = observation.rho
+            rho_after = sim_obs.rho
+            max_rho_before = float(rho_before.max())
+            max_rho_after = float(rho_after.max())
+            delta_rho = max_rho_after - max_rho_before
+            
+            overflow_before = np.where(rho_before > 1.0)[0]
+            overflow_after = np.where(rho_after > 1.0)[0]
+            overflow_before_count = len(overflow_before)
+            overflow_after_count = len(overflow_after)
+            
+            # 1. 安全检查（熔断机制）
             if sim_done:
                 return False, "动作导致游戏结束 (Game Over)"
             if max_rho_after > 1.5:
                 return False, f"动作导致极度过载 ({max_rho_after:.2%})"
             
-            # 2. 缓解策略 (Mitigation)
-            max_rho_before = float(observation.rho.max())
-            overflow_before = (observation.rho > 1.0).sum()
-            overflow_after = (sim_obs.rho > 1.0).sum()
+            # 2. 成功情况：完全消除过载
+            if overflow_after_count == 0 and overflow_before_count > 0:
+                return True, f"成功：所有过载已消除。最大负载率从 {max_rho_before:.2%} 降至 {max_rho_after:.2%}"
             
-            if overflow_before > 0:
-                # 只要有过载，任何改善都是好的
-                if overflow_after < overflow_before:
-                    return True, f"有效缓解: 过载线路 {overflow_before}->{overflow_after}"
-                if max_rho_after < max_rho_before - 0.005: # 哪怕降低 0.5%
-                    return True, f"有效缓解: Max Rho {max_rho_before:.2%}->{max_rho_after:.2%}"
-                if max_rho_after >= max_rho_before:
-                    return False, f"无效动作: 负载率未下降 ({max_rho_before:.2%} -> {max_rho_after:.2%})"
+            if overflow_after_count == 0 and overflow_before_count == 0:
+                return True, f"验证通过：系统保持安全状态（最大负载率 {max_rho_after:.2%}）"
+            
+            # 3. 缓解策略（量化反馈）
+            if overflow_before_count > 0:
+                # 原本有过载
+                if overflow_after_count < overflow_before_count:
+                    # 过载线路减少
+                    feedback = f"有效缓解：过载线路数从 {overflow_before_count} 降至 {overflow_after_count}"
+                    if delta_rho < -0.01:  # 最大负载率也下降了
+                        feedback += f"，最大负载率从 {max_rho_before:.2%} 降至 {max_rho_after:.2%}（改善 {abs(delta_rho):.2%}）"
+                    return True, feedback
+                
+                if delta_rho < -0.02:  # 最大负载率明显下降（>2%）
+                    feedback = f"方向正确：最大负载率从 {max_rho_before:.2%} 降至 {max_rho_after:.2%}（改善 {abs(delta_rho):.2%}）"
+                    if overflow_after_count == overflow_before_count:
+                        feedback += f"，但仍有 {overflow_after_count} 条线路过载。建议加大调整力度或寻找协同发电机。"
+                    return True, feedback
+                
+                if delta_rho > 0.02:  # 最大负载率恶化（>2%）
+                    return False, f"方向错误：最大负载率从 {max_rho_before:.2%} 恶化至 {max_rho_after:.2%}（恶化 {delta_rho:.2%}）。建议撤销并尝试相反操作。"
+                
+                if abs(delta_rho) <= 0.02:  # 变化很小
+                    return False, f"无效动作：负载率几乎无变化（{max_rho_before:.2%} -> {max_rho_after:.2%}），仍有 {overflow_after_count} 条线路过载。"
+                
+                # 默认情况：负载率未下降
+                return False, f"无效动作：负载率未下降（{max_rho_before:.2%} -> {max_rho_after:.2%}），仍有 {overflow_after_count} 条线路过载。"
             
             else:
-                # 原本安全
-                if overflow_after > 0:
-                    return False, f"动作导致新过载 ({max_rho_after:.2%})"
-                if max_rho_after > max_rho_before + 0.10: # 放宽一点限制，允许适度上升
-                    return False, "动作导致负载率大幅上升"
-            
-            return True, "验证通过"
+                # 原本安全，检查是否引入新过载
+                if overflow_after_count > 0:
+                    # 找出新过载的线路
+                    new_overload_lines = overflow_after.tolist()
+                    feedback = f"动作导致新过载：{overflow_after_count} 条线路过载（线路 {new_overload_lines[:5]}{'...' if len(new_overload_lines) > 5 else ''}）"
+                    feedback += f"，最大负载率从 {max_rho_before:.2%} 升至 {max_rho_after:.2%}"
+                    return False, feedback
+                
+                if max_rho_after > max_rho_before + 0.10:  # 负载率大幅上升（>10%）
+                    return False, f"动作导致负载率大幅上升：从 {max_rho_before:.2%} 升至 {max_rho_after:.2%}（上升 {delta_rho:.2%}）"
+                
+                # 原本安全，动作后仍安全
+                return True, f"验证通过：系统保持安全（最大负载率 {max_rho_after:.2%}）"
 
         except Exception as e:
             return False, f"模拟过程出错: {str(e)}"

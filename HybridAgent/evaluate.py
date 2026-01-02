@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Planner Baseline Agent 评估程序
-参考 OptimCVXPY 和 ExpertAgent 的评估接口
+HybridAgent 评估程序
 """
 
 import os
@@ -10,7 +9,7 @@ import argparse
 from pathlib import Path
 
 # 添加项目根目录到路径
-project_root = Path(__file__).parent.parent.parent
+project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
@@ -24,23 +23,21 @@ from grid2op.Runner import Runner
 from grid2op.Reward import RedispReward, BridgeReward, CloseToOverflowReward, DistanceReward
 from grid2op.Action import TopologyChangeAction
 
-# 导入 Planner Agent（支持直接运行和作为模块导入）
+# 导入 HybridAgent
 try:
-    # 如果作为模块导入，使用相对导入
-    from .agent import Planner
+    from .hybrid_agent import HybridAgent
 except ImportError:
-    # 如果直接运行，使用绝对导入
     try:
-        from Planner.agent import Planner
+        from HybridAgent.hybrid_agent import HybridAgent
     except ImportError:
-        from agent import Planner
+        from hybrid_agent import HybridAgent
 
 # 导入 LLM 和日志工具
 from utils import OpenAIChat, get_logger
 
-logger = get_logger("PlannerEvaluate")
+logger = get_logger("HybridAgentEvaluate")
 
-DEFAULT_LOGS_DIR = "./logs-eval/planner"
+DEFAULT_LOGS_DIR = "./logs-eval/hybrid-agent"
 DEFAULT_NB_EPISODE = 1
 DEFAULT_NB_PROCESS = 1
 DEFAULT_MAX_STEPS = -1
@@ -48,7 +45,7 @@ DEFAULT_MAX_STEPS = -1
 
 def cli():
     """命令行参数解析"""
-    parser = argparse.ArgumentParser(description="Evaluate Planner Baseline Agent")
+    parser = argparse.ArgumentParser(description="Evaluate HybridAgent")
     
     # 环境参数
     parser.add_argument("--data_dir", required=True,
@@ -86,34 +83,42 @@ def cli():
     parser.add_argument("--llm_max_tokens", type=int, default=4096,
                        help="LLM max tokens (default: 4096)")
     
-    # ReAct Agent 参数
-    parser.add_argument("--max_react_steps", type=int, default=3,
-                       help="Maximum ReAct loop steps (default: 3)")
-    parser.add_argument("--rho_danger", type=float, default=0.92,
-                       help="Rho danger threshold for heuristic strategy (default: 0.92, call LLM when rho > 92% for preventive action)")
+    # HybridAgent 参数
+    parser.add_argument("--rho_safe", type=float, default=0.85,
+                       help="Rho safe threshold (default: 0.85)")
+    parser.add_argument("--rho_danger", type=float, default=0.95,
+                       help="Rho danger threshold (default: 0.95)")
+    parser.add_argument("--rho_llm_threshold", type=float, default=1.05,
+                       help="LLM activation threshold (default: 1.05)")
+    
+    # 场景选择参数
+    parser.add_argument("--episode_id", type=str, default=None,
+                       help="Comma-separated list of episode IDs to run (e.g., '0,1,2' or '0-6')")
+    parser.add_argument("--env_seeds", type=str, default=None,
+                       help="Comma-separated list of environment seeds (e.g., '0,1,2')")
     
     return parser.parse_args()
 
 
 def evaluate(env,
-             load_path=None,
              logs_path=DEFAULT_LOGS_DIR,
              nb_episode=DEFAULT_NB_EPISODE,
              nb_process=DEFAULT_NB_PROCESS,
              max_steps=DEFAULT_MAX_STEPS,
              verbose=False,
              save_gif=False,
-             # LLM 参数
+             episode_id=None,
+             env_seeds=None,
              llm_model=None,
              llm_api_key=None,
              llm_base_url=None,
              llm_temperature=0.7,
              llm_max_tokens=4096,
-    # ReAct Agent 参数
-    max_react_steps=3,
-    rho_danger=0.92,  # 修改为 0.92：在过载前进行预防性调度（原值 1.0 太晚）
+             rho_safe=0.85,
+             rho_danger=0.95,
+             rho_llm_threshold=1.05,
              **kwargs):
-             
+    
     # 创建 LLM 客户端
     try:
         llm_client = OpenAIChat(
@@ -128,17 +133,18 @@ def evaluate(env,
         logger.error(f"LLM 客户端创建失败: {e}")
         raise
     
-    # 创建 ReAct Agent
-    agent = Planner(
+    # 创建 HybridAgent
+    agent = HybridAgent(
         action_space=env.action_space,
         observation_space=env.observation_space,
+        env=env,
         llm_client=llm_client,
-        max_react_steps=max_react_steps,
-        name="Planner",
+        rho_safe=rho_safe,
         rho_danger=rho_danger,
+        rho_llm_threshold=rho_llm_threshold,
         **kwargs
     )
-    logger.info(f"ReAct Agent 创建成功: max_react_steps={max_react_steps}")
+    logger.info(f"HybridAgent 创建成功: rho_safe={rho_safe}, rho_danger={rho_danger}, rho_llm_threshold={rho_llm_threshold}")
     
     # 构建 Runner
     runner_params = env.get_params_for_runner()
@@ -151,12 +157,25 @@ def evaluate(env,
     # 运行评估
     os.makedirs(logs_path, exist_ok=True)
     logger.info(f"开始评估: nb_episode={nb_episode}, max_steps={max_steps}")
+    if episode_id is not None:
+        logger.info(f"指定场景编号: {episode_id}")
     
-    res = runner.run(path_save=logs_path,
-                     nb_episode=nb_episode,
-                     nb_process=nb_process,
-                     max_iter=max_steps,
-                     pbar=True)
+    # 构建 run 参数
+    run_kwargs = {
+        "path_save": logs_path,
+        "nb_episode": nb_episode,
+        "nb_process": nb_process,
+        "max_iter": max_steps,
+        "pbar": True
+    }
+    
+    # 如果指定了场景编号，添加到参数中
+    if episode_id is not None:
+        run_kwargs["episode_id"] = episode_id
+    if env_seeds is not None:
+        run_kwargs["env_seeds"] = env_seeds
+    
+    res = runner.run(**run_kwargs)
     
     # 打印摘要
     print("\n" + "=" * 60)
@@ -192,13 +211,16 @@ def evaluate(env,
         stats = agent.get_stats()
         print("\nAgent Statistics:")
         print(f"  Total steps: {stats.get('total_steps', 0)}")
-        print(f"  Successful actions: {stats.get('successful_actions', 0)}")
-        print(f"  Failed actions: {stats.get('failed_actions', 0)}")
-        print(f"  Do nothing count: {stats.get('do_nothing_count', 0)}")
-        print(f"  Heuristic do nothing count: {stats.get('heuristic_do_nothing_count', 0)}")
-        print(f"  Success rate: {stats.get('success_rate', 0.0):.2%}")
-        print(f"  Heuristic do nothing rate: {stats.get('heuristic_do_nothing_rate', 0.0):.2%}")
-        print(f"  Avg ReAct loops per step: {stats.get('avg_react_loops_per_step', 0.0):.2f}")
+        print(f"  Optimizer only: {stats.get('optimizer_only', 0)}")
+        print(f"  LLM activated: {stats.get('llm_activated', 0)}")
+        print(f"  LLM success: {stats.get('llm_success', 0)}")
+        print(f"  LLM failed: {stats.get('llm_failed', 0)}")
+        print(f"  Simulation failures: {stats.get('simulation_failures', 0)}")
+        if stats.get('total_steps', 0) > 0:
+            print(f"  Optimizer only rate: {stats.get('optimizer_only_rate', 0.0):.2%}")
+            print(f"  LLM activation rate: {stats.get('llm_activation_rate', 0.0):.2%}")
+            if stats.get('llm_activated', 0) > 0:
+                print(f"  LLM success rate: {stats.get('llm_success_rate', 0.0):.2%}")
     
     print("=" * 60)
     
@@ -220,73 +242,62 @@ if __name__ == "__main__":
     # 解析命令行参数
     args = cli()
     
-    # 确定 data_dir 是环境名称还是路径
+    # 1. 确定 backend
+    backend = None
+    if args.use_lightsim:
+        try:
+            from lightsim2grid import LightSimBackend
+            backend = LightSimBackend()
+        except ImportError:
+            print("Warning: lightsim2grid not available, using default backend")
+            backend = None
+    
+    # 2. 准备通用环境参数
+    env_kwargs = {
+        "test": args.test,
+        "reward_class": RedispReward,
+        "action_class": TopologyChangeAction,
+        "other_rewards": {
+            "bridge": BridgeReward,
+            "overflow": CloseToOverflowReward,
+            "distance": DistanceReward
+        }
+    }
+    
+    # 如果有 backend，添加到参数中
+    if backend is not None:
+        env_kwargs["backend"] = backend
+    
+    # 3. 尝试创建环境（Grid2Op 的 make 函数通常可以直接处理路径或名称）
     try:
-        # 尝试作为环境名称使用
-        if args.use_lightsim:
-            try:
-                from lightsim2grid import LightSimBackend
-                backend = LightSimBackend()
-            except ImportError:
-                print("Warning: lightsim2grid not available, using default backend")
-                backend = None
-        else:
-            backend = None
-        
-        # 尝试创建环境
-        if backend:
-            env = make(args.data_dir,
-                       test=args.test,
-                       backend=backend,
-                       reward_class=RedispReward,
-                       action_class=TopologyChangeAction,
-                       other_rewards={
-                           "bridge": BridgeReward,
-                           "overflow": CloseToOverflowReward,
-                           "distance": DistanceReward
-                       })
-        else:
-            env = make(args.data_dir,
-                       test=args.test,
-                       reward_class=RedispReward,
-                       action_class=TopologyChangeAction,
-                       other_rewards={
-                           "bridge": BridgeReward,
-                           "overflow": CloseToOverflowReward,
-                           "distance": DistanceReward
-                       })
+        env = make(args.data_dir, **env_kwargs)
     except Exception as e:
-        # 如果失败，尝试作为路径
-        print(f"Warning: Could not create environment with name '{args.data_dir}': {e}")
-        print("Trying as a path...")
-        if args.use_lightsim:
-            try:
-                from lightsim2grid import LightSimBackend
-                backend = LightSimBackend()
-            except ImportError:
-                backend = None
-        else:
-            backend = None
-        
-        if backend:
-            env = make(args.data_dir,
-                       backend=backend,
-                       reward_class=RedispReward,
-                       action_class=TopologyChangeAction,
-                       other_rewards={
-                           "bridge": BridgeReward,
-                           "overflow": CloseToOverflowReward,
-                           "distance": DistanceReward
-                       })
-        else:
-            env = make(args.data_dir,
-                       reward_class=RedispReward,
-                       action_class=TopologyChangeAction,
-                       other_rewards={
-                           "bridge": BridgeReward,
-                           "overflow": CloseToOverflowReward,
-                           "distance": DistanceReward
-                       })
+        # 如果失败，尝试不带 test 参数（某些环境可能不支持 test 参数）
+        logger.warning(f"创建环境失败: {e}，尝试不带 test 参数...")
+        env_kwargs.pop("test", None)
+        env = make(args.data_dir, **env_kwargs)
+    
+    # 解析 episode_id 和 env_seeds
+    episode_id = None
+    if args.episode_id:
+        try:
+            # 支持 "0,1,2" 或 "0-6" 格式
+            if '-' in args.episode_id:
+                start, end = map(int, args.episode_id.split('-'))
+                episode_id = list(range(start, end + 1))
+            else:
+                episode_id = [int(x.strip()) for x in args.episode_id.split(',')]
+        except ValueError:
+            logger.warning(f"无法解析 episode_id: {args.episode_id}，将使用默认顺序")
+            episode_id = None
+    
+    env_seeds = None
+    if args.env_seeds:
+        try:
+            env_seeds = [int(x.strip()) for x in args.env_seeds.split(',')]
+        except ValueError:
+            logger.warning(f"无法解析 env_seeds: {args.env_seeds}，将使用默认种子")
+            env_seeds = None
     
     # 调用评估接口
     evaluate(env,
@@ -296,11 +307,14 @@ if __name__ == "__main__":
              max_steps=args.max_steps,
              verbose=args.verbose,
              save_gif=args.gif,
+             episode_id=episode_id,
+             env_seeds=env_seeds,
              llm_model=args.llm_model,
              llm_api_key=args.llm_api_key,
              llm_base_url=args.llm_base_url,
              llm_temperature=args.llm_temperature,
              llm_max_tokens=args.llm_max_tokens,
-             max_react_steps=args.max_react_steps,
-             rho_danger=args.rho_danger)
+             rho_safe=args.rho_safe,
+             rho_danger=args.rho_danger,
+             rho_llm_threshold=args.rho_llm_threshold)
 

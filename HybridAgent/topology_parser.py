@@ -12,6 +12,8 @@ import numpy as np
 from grid2op.Action import BaseAction
 from grid2op.Observation import BaseObservation
 
+from .grid_utils import get_substation_elements
+
 
 class TopologyParser:
     """
@@ -159,8 +161,8 @@ class TopologyParser:
         bus_1_elements = config["bus_1"]  # 元素名称列表
         bus_2_elements = config["bus_2"]  # 元素名称列表
         
-        # 1. 获取变电站的所有设备
-        sub_elements = self._get_substation_elements(observation, sub_id)
+        # 1. 获取变电站的所有设备（使用共享工具函数）
+        _, sub_elements = get_substation_elements(observation, sub_id, include_power=False, include_rho=False)
         
         # 2. 将元素名称映射到 Grid2Op 内部 ID
         bus_1_ids = self._map_element_names_to_ids(bus_1_elements, sub_elements)
@@ -176,108 +178,61 @@ class TopologyParser:
             for elem_key in missing:
                 bus_1_ids[elem_key] = sub_elements[elem_key]
         
-        # 4. 构建 set_bus 字典
-        set_bus_dict = {}
-        
-        # 对于每个设备类型，构建对应的 set_bus 配置
-        # Grid2Op 的 set_bus 格式：
-        # - 对于线路: {"lines_or_id": [line_id, ...], "lines_ex_id": [line_id, ...]}
-        # - 对于发电机: {"generators_id": [gen_id, ...]}
-        # - 对于负荷: {"loads_id": [load_id, ...]}
-        
-        # 但是，更简单的方式是使用统一的 set_bus 格式：
+        # 4. 构建 set_bus 字典（使用循环消除重复逻辑）
+        # Grid2Op 的 set_bus 动作格式：
         # action.set_bus = {
-        #     "substations_id": [sub_id],
-        #     "substations_bus": [[bus_config]]
+        #     "loads_id": [(load_id, bus_id), ...],
+        #     "generators_id": [(gen_id, bus_id), ...],
+        #     "lines_or_id": [(line_id, bus_id), ...],
+        #     "lines_ex_id": [(line_id, bus_id), ...],
         # }
         
-        # 或者使用更直接的方式：为每个设备单独设置
-        # 我们需要构建一个字典，键是设备类型和ID，值是目标母线（1 或 2）
+        # 使用字典存储各类型设备的分配
+        topo_dict = {
+            "loads": [],
+            "generators": [],
+            "lines_or": [],
+            "lines_ex": []
+        }
         
-        # 实际上，Grid2Op 的 set_bus 动作格式是：
-        # action.set_bus = {
-        #     "loads_id": [load_id, ...],
-        #     "loads_bus": [bus_id, ...],
-        #     "generators_id": [gen_id, ...],
-        #     "generators_bus": [bus_id, ...],
-        #     "lines_or_id": [line_id, ...],
-        #     "lines_or_bus": [bus_id, ...],
-        #     "lines_ex_id": [line_id, ...],
-        #     "lines_ex_bus": [bus_id, ...],
-        # }
+        # 遍历 bus_1 (bus=1) 和 bus_2 (bus=2)，统一处理
+        assignments = [(bus_1_ids, 1), (bus_2_ids, 2)]
+        processed_ids = set()  # 防止重复分配
         
-        loads_id = []
-        loads_bus = []
-        generators_id = []
-        generators_bus = []
-        lines_or_id = []
-        lines_or_bus = []
-        lines_ex_id = []
-        lines_ex_bus = []
+        for elem_dict, bus_idx in assignments:
+            for elem_key, elem_info in elem_dict.items():
+                elem_type = elem_info["type"]
+                elem_id = elem_info["id"]
+                
+                # 防止重复分配
+                if (elem_type, elem_id) in processed_ids:
+                    continue
+                processed_ids.add((elem_type, elem_id))
+                
+                if elem_type == "load":
+                    topo_dict["loads"].append((elem_id, bus_idx))
+                elif elem_type == "generator":
+                    topo_dict["generators"].append((elem_id, bus_idx))
+                elif elem_type == "line":
+                    # 判断是 origin 还是 extremity
+                    line_id = elem_id
+                    if hasattr(observation, 'line_or_to_subid'):
+                        if observation.line_or_to_subid[line_id] == sub_id:
+                            topo_dict["lines_or"].append((line_id, bus_idx))
+                    if hasattr(observation, 'line_ex_to_subid'):
+                        if observation.line_ex_to_subid[line_id] == sub_id:
+                            topo_dict["lines_ex"].append((line_id, bus_idx))
         
-        # 处理 bus_1 的设备（分配到母线 1）
-        for elem_key, elem_info in bus_1_ids.items():
-            elem_type = elem_info["type"]
-            elem_id = elem_info["id"]
-            
-            if elem_type == "load":
-                loads_id.append(elem_id)
-                loads_bus.append(1)
-            elif elem_type == "generator":
-                generators_id.append(elem_id)
-                generators_bus.append(1)
-            elif elem_type == "line":
-                # 需要判断是 origin 还是 extremity
-                line_id = elem_id
-                if hasattr(observation, 'line_or_to_subid'):
-                    if observation.line_or_to_subid[line_id] == sub_id:
-                        lines_or_id.append(line_id)
-                        lines_or_bus.append(1)
-                if hasattr(observation, 'line_ex_to_subid'):
-                    if observation.line_ex_to_subid[line_id] == sub_id:
-                        lines_ex_id.append(line_id)
-                        lines_ex_bus.append(1)
-        
-        # 处理 bus_2 的设备（分配到母线 2）
-        for elem_key, elem_info in bus_2_ids.items():
-            elem_type = elem_info["type"]
-            elem_id = elem_info["id"]
-            
-            if elem_type == "load":
-                loads_id.append(elem_id)
-                loads_bus.append(2)
-            elif elem_type == "generator":
-                generators_id.append(elem_id)
-                generators_bus.append(2)
-            elif elem_type == "line":
-                line_id = elem_id
-                if hasattr(observation, 'line_or_to_subid'):
-                    if observation.line_or_to_subid[line_id] == sub_id:
-                        lines_or_id.append(line_id)
-                        lines_or_bus.append(2)
-                if hasattr(observation, 'line_ex_to_subid'):
-                    if observation.line_ex_to_subid[line_id] == sub_id:
-                        lines_ex_id.append(line_id)
-                        lines_ex_bus.append(2)
-        
-        # 构建动作字典（Grid2Op 格式：每个元素类型使用 (id, bus) 元组列表）
+        # 构建 Grid2Op 动作字典
         set_bus_dict = {}
-        
-        if loads_id:
-            # 格式: [(load_id, bus_id), ...]
-            set_bus_dict["loads_id"] = [(loads_id[i], loads_bus[i]) for i in range(len(loads_id))]
-        
-        if generators_id:
-            # 格式: [(gen_id, bus_id), ...]
-            set_bus_dict["generators_id"] = [(generators_id[i], generators_bus[i]) for i in range(len(generators_id))]
-        
-        if lines_or_id:
-            # 格式: [(line_id, bus_id), ...]
-            set_bus_dict["lines_or_id"] = [(lines_or_id[i], lines_or_bus[i]) for i in range(len(lines_or_id))]
-        
-        if lines_ex_id:
-            # 格式: [(line_id, bus_id), ...]
-            set_bus_dict["lines_ex_id"] = [(lines_ex_id[i], lines_ex_bus[i]) for i in range(len(lines_ex_id))]
+        if topo_dict["loads"]:
+            set_bus_dict["loads_id"] = topo_dict["loads"]
+        if topo_dict["generators"]:
+            set_bus_dict["generators_id"] = topo_dict["generators"]
+        if topo_dict["lines_or"]:
+            set_bus_dict["lines_or_id"] = topo_dict["lines_or"]
+        if topo_dict["lines_ex"]:
+            set_bus_dict["lines_ex_id"] = topo_dict["lines_ex"]
         
         # 如果没有有效的动作，返回空动作
         if not set_bus_dict:
@@ -287,60 +242,6 @@ class TopologyParser:
         action = action_space({"set_bus": set_bus_dict})
         return action
     
-    def _get_substation_elements(
-        self,
-        observation: BaseObservation,
-        sub_id: int
-    ) -> Dict[str, Dict[str, Any]]:
-        """
-        获取变电站的所有设备
-        
-        Returns:
-            字典，键为元素名称（如 "gen_0"），值为元素信息
-        """
-        elements = {}
-        
-        # 1. 发电机
-        if hasattr(observation, 'gen_to_subid'):
-            gen_ids = np.where(observation.gen_to_subid == sub_id)[0]
-            for gen_id in gen_ids:
-                elem_name = f"gen_{gen_id}"
-                elements[elem_name] = {
-                    "type": "generator",
-                    "id": int(gen_id),
-                    "name": elem_name
-                }
-        
-        # 2. 负荷
-        if hasattr(observation, 'load_to_subid'):
-            load_ids = np.where(observation.load_to_subid == sub_id)[0]
-            for load_id in load_ids:
-                elem_name = f"load_{load_id}"
-                elements[elem_name] = {
-                    "type": "load",
-                    "id": int(load_id),
-                    "name": elem_name
-                }
-        
-        # 3. 线路
-        connected_lines = []
-        if hasattr(observation, 'line_or_to_subid'):
-            or_lines = np.where(observation.line_or_to_subid == sub_id)[0]
-            connected_lines.extend(or_lines.tolist())
-        if hasattr(observation, 'line_ex_to_subid'):
-            ex_lines = np.where(observation.line_ex_to_subid == sub_id)[0]
-            connected_lines.extend(ex_lines.tolist())
-        
-        connected_lines = list(set(connected_lines))
-        for line_id in connected_lines:
-            elem_name = f"line_{line_id}"
-            elements[elem_name] = {
-                "type": "line",
-                "id": int(line_id),
-                "name": elem_name
-            }
-        
-        return elements
     
     def _map_element_names_to_ids(
         self,

@@ -92,6 +92,12 @@ def cli():
     parser.add_argument("--rho_danger", type=float, default=0.92,
                        help="Rho danger threshold for heuristic strategy (default: 0.92, call LLM when rho > 92% for preventive action)")
     
+    # 场景选择参数
+    parser.add_argument("--episode_id", type=str, default=None,
+                       help="Comma-separated list of episode IDs to run (e.g., '0,1,2' or '0-6'). If not specified, runs episodes in default order.")
+    parser.add_argument("--env_seeds", type=str, default=None,
+                       help="Comma-separated list of environment seeds (e.g., '0,1,2')")
+    
     return parser.parse_args()
 
 
@@ -103,15 +109,18 @@ def evaluate(env,
              max_steps=DEFAULT_MAX_STEPS,
              verbose=False,
              save_gif=False,
+             # 场景选择参数
+             episode_id=None,  # 指定场景编号列表，例如 [0, 1, 2] 或 None（使用默认顺序）
+             env_seeds=None,   # 环境随机种子列表
              # LLM 参数
              llm_model=None,
              llm_api_key=None,
              llm_base_url=None,
              llm_temperature=0.7,
              llm_max_tokens=4096,
-    # ReAct Agent 参数
-    max_react_steps=3,
-    rho_danger=0.92,  # 修改为 0.92：在过载前进行预防性调度（原值 1.0 太晚）
+             # ReAct Agent 参数
+             max_react_steps=3,
+             rho_danger=0.92,  # 修改为 0.92：在过载前进行预防性调度（原值 1.0 太晚）
              **kwargs):
              
     # 创建 LLM 客户端
@@ -151,12 +160,25 @@ def evaluate(env,
     # 运行评估
     os.makedirs(logs_path, exist_ok=True)
     logger.info(f"开始评估: nb_episode={nb_episode}, max_steps={max_steps}")
+    if episode_id is not None:
+        logger.info(f"指定场景编号: {episode_id}")
     
-    res = runner.run(path_save=logs_path,
-                     nb_episode=nb_episode,
-                     nb_process=nb_process,
-                     max_iter=max_steps,
-                     pbar=True)
+    # 构建 run 参数
+    run_kwargs = {
+        "path_save": logs_path,
+        "nb_episode": nb_episode,
+        "nb_process": nb_process,
+        "max_iter": max_steps,
+        "pbar": True
+    }
+    
+    # 如果指定了场景编号，添加到参数中
+    if episode_id is not None:
+        run_kwargs["episode_id"] = episode_id
+    if env_seeds is not None:
+        run_kwargs["env_seeds"] = env_seeds
+    
+    res = runner.run(**run_kwargs)
     
     # 打印摘要
     print("\n" + "=" * 60)
@@ -288,6 +310,28 @@ if __name__ == "__main__":
                            "distance": DistanceReward
                        })
     
+    # 解析 episode_id 和 env_seeds
+    episode_id = None
+    if args.episode_id:
+        try:
+            # 支持 "0,1,2" 或 "0-6" 格式
+            if '-' in args.episode_id:
+                start, end = map(int, args.episode_id.split('-'))
+                episode_id = list(range(start, end + 1))
+            else:
+                episode_id = [int(x.strip()) for x in args.episode_id.split(',')]
+        except ValueError:
+            logger.warning(f"无法解析 episode_id: {args.episode_id}，将使用默认顺序")
+            episode_id = None
+    
+    env_seeds = None
+    if args.env_seeds:
+        try:
+            env_seeds = [int(x.strip()) for x in args.env_seeds.split(',')]
+        except ValueError:
+            logger.warning(f"无法解析 env_seeds: {args.env_seeds}，将使用默认种子")
+            env_seeds = None
+    
     # 调用评估接口
     evaluate(env,
              logs_path=args.logs_dir,
@@ -296,6 +340,8 @@ if __name__ == "__main__":
              max_steps=args.max_steps,
              verbose=args.verbose,
              save_gif=args.gif,
+             episode_id=episode_id,
+             env_seeds=env_seeds,
              llm_model=args.llm_model,
              llm_api_key=args.llm_api_key,
              llm_base_url=args.llm_base_url,

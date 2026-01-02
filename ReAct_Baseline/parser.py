@@ -157,4 +157,47 @@ class ActionParser:
         
         # 如果都没找到，返回空字符串（将由 parse 处理）
         return ""
+    
+    def extract_action_from_text(self, text: str) -> Optional[str]:
+        """
+        从文本中提取动作指令（用于 RAG 上下文解析）
+        
+        与 extract_action_from_response 类似，但专门用于从 RAG 检索到的历史经验中提取动作
+        
+        Args:
+            text: 包含动作指令的文本
+            
+        Returns:
+            提取出的动作指令文本，如果未找到则返回 None
+        """
+        # 查找 Action: 标记后的内容
+        action_pattern = re.compile(
+            r'Action\s*:\s*(.+?)(?=\n\s*(?:Thought|Observation|$))',
+            re.IGNORECASE | re.DOTALL
+        )
+        
+        match = action_pattern.search(text)
+        if match:
+            return match.group(1).strip()
+        
+        # 如果没有找到 Action: 标记，尝试查找函数调用模式
+        actions = []
+        
+        redispatch_matches = self.redispatch_pattern.findall(text)
+        if redispatch_matches:
+            for gen_id_str, amount_str in redispatch_matches:
+                actions.append(f"redispatch({gen_id_str}, {amount_str})")
+        
+        line_status_matches = self.set_line_status_pattern.findall(text)
+        if line_status_matches:
+            for line_id_str, status_str in line_status_matches:
+                actions.append(f"set_line_status({line_id_str}, {status_str})")
+        
+        if self.do_nothing_pattern.search(text):
+            actions.append("do_nothing()")
+        
+        if actions:
+            return "\n".join(actions)
+        
+        return None
 

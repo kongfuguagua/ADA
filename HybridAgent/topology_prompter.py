@@ -10,6 +10,8 @@ from typing import Dict, Any, List, Optional
 import numpy as np
 from grid2op.Observation import BaseObservation
 
+from .grid_utils import get_substation_elements
+
 
 class TopologyPrompter:
     """
@@ -220,52 +222,40 @@ class TopologyPrompter:
         if hasattr(observation, 'time_before_cooldown_sub'):
             cooldown = int(observation.time_before_cooldown_sub[sub_id])
         
-        # 1. 连接的发电机
-        if hasattr(observation, 'gen_to_subid'):
-            gen_ids = np.where(observation.gen_to_subid == sub_id)[0]
-            for gen_id in gen_ids:
-                gen_p = float(observation.gen_p[gen_id]) if hasattr(observation, 'gen_p') else 0.0
-                is_redispatchable = bool(observation.gen_redispatchable[gen_id]) if hasattr(observation, 'gen_redispatchable') else False
-                elements.append({
-                    "type": "generator",
-                    "id": int(gen_id),
-                    "name": f"gen_{gen_id}",
-                    "power_mw": gen_p,
-                    "redispatchable": is_redispatchable
-                })
+        # 使用共享工具函数获取变电站元件（包含功率和负载率信息）
+        sub_elements_dict, _ = get_substation_elements(
+            observation, sub_id, include_power=True, include_rho=True
+        )
         
-        # 2. 连接的负荷
-        if hasattr(observation, 'load_to_subid'):
-            load_ids = np.where(observation.load_to_subid == sub_id)[0]
-            for load_id in load_ids:
-                load_p = float(observation.load_p[load_id]) if hasattr(observation, 'load_p') else 0.0
-                elements.append({
-                    "type": "load",
-                    "id": int(load_id),
-                    "name": f"load_{load_id}",
-                    "power_mw": load_p
-                })
+        # 1. 处理发电机
+        for gen_info in sub_elements_dict['generators']:
+            elements.append({
+                "type": "generator",
+                "id": gen_info["id"],
+                "name": gen_info["name"],
+                "power_mw": gen_info.get("p", 0.0),
+                "redispatchable": gen_info.get("redispatchable", False)
+            })
         
-        # 3. 连接的线路（包括过载线路）
-        connected_lines = []
-        if hasattr(observation, 'line_or_to_subid'):
-            or_lines = np.where(observation.line_or_to_subid == sub_id)[0]
-            connected_lines.extend(or_lines.tolist())
-        if hasattr(observation, 'line_ex_to_subid'):
-            ex_lines = np.where(observation.line_ex_to_subid == sub_id)[0]
-            connected_lines.extend(ex_lines.tolist())
+        # 2. 处理负荷
+        for load_info in sub_elements_dict['loads']:
+            elements.append({
+                "type": "load",
+                "id": load_info["id"],
+                "name": load_info["name"],
+                "power_mw": load_info.get("p", 0.0)
+            })
         
-        # 去重
-        connected_lines = list(set(connected_lines))
-        for line_id_conn in connected_lines:
+        # 3. 处理线路（包括过载标记）
+        for line_info in sub_elements_dict['lines']:
+            line_id_conn = line_info["id"]
             is_overloaded = (line_id_conn == target_line_id)
-            line_rho = float(observation.rho[line_id_conn]) if hasattr(observation, 'rho') else 0.0
             elements.append({
                 "type": "line",
-                "id": int(line_id_conn),
-                "name": f"line_{line_id_conn}",
+                "id": line_id_conn,
+                "name": line_info["name"],
                 "is_overloaded": is_overloaded,
-                "rho": line_rho
+                "rho": line_info.get("rho", 0.0)
             })
         
         # 如果变电站没有设备，返回 None

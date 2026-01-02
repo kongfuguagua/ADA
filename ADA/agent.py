@@ -124,7 +124,6 @@ class ADA_Agent(BaseAgent):
                 action_space=action_space,
                 observation_space=observation_space,
                 max_candidates=max_planner_candidates,
-                grid_name=kwargs.get("grid_name", "IEEE14"),
                 rho_danger=rho_danger,  # 显式传递 rho_danger 参数
                 **kwargs,
             )
@@ -250,6 +249,7 @@ class ADA_Agent(BaseAgent):
                     logger.debug(f"Planner 生成 {len(planner_candidates)} 个候选")
                 except Exception as e:
                     logger.error(f"Planner 执行失败: {e}", exc_info=True)
+                    self.planner.suggest_topologies(observation)
             else:
                 logger.warning("Planner 未初始化，跳过拓扑候选生成")
             

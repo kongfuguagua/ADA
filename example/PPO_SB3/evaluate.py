@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # Copyright (c) 2020-2022 RTE (https://www.rte-france.com)
 # See AUTHORS.txt
 # This Source Code Form is subject to the terms of the Mozilla Public License, version 2.0.
@@ -8,388 +9,374 @@
 
 import os
 import json
-import argparse
+import warnings
+from typing import Optional, List
+import numpy as np
+
 from grid2op.Runner import Runner
 from grid2op.gym_compat import BoxGymActSpace, BoxGymObsSpace, GymEnv
-from l2rpn_baselines.utils.gymenv_custom import GymEnvWithHeuristics
 
-from l2rpn_baselines.utils.save_log_gif import save_log_gif
-from l2rpn_baselines.PPO_SB3.utils import SB3Agent
+# --- 兼容本地运行和包运行的导入 ---
+try:
+    from l2rpn_baselines.PPO_SB3.utils import SB3Agent
+except ImportError:
+    try:
+        from .utils import SB3Agent
+    except ImportError:
+        from utils import SB3Agent
 
-DEFAULT_LOGS_DIR = "./logs-eval/ppo-sb3-baseline"
-DEFAULT_NB_EPISODE = 1
-DEFAULT_NB_PROCESS = 1
-DEFAULT_MAX_STEPS = -1
-DEFAULT_LOAD_PATH = "./saved_model"
-DEFAULT_NAME = "PPO_SB3"
+try:
+    from l2rpn_baselines.utils.save_log_gif import save_log_gif
+except ImportError:
+    try:
+        from l2rpn_baselines.utils import save_log_gif
+    except ImportError:
+        def save_log_gif(logs_path, res):
+            warnings.warn("save_log_gif not available. GIF saving skipped.")
 
-
-def cli():
-    """Command line interface for evaluation."""
-    parser = argparse.ArgumentParser(description="Evaluate PPO_SB3 baseline")
-    parser.add_argument("--data_dir", required=True,
-                        help="Path to the dataset root directory or environment name (e.g., l2rpn_case14_sandbox)")
-    parser.add_argument("--load_path", required=False,
-                        default=DEFAULT_LOAD_PATH, type=str,
-                        help="Path to the saved model directory")
-    parser.add_argument("--name", required=False,
-                        default=DEFAULT_NAME, type=str,
-                        help="Name of the trained model")
-    parser.add_argument("--logs_dir", required=False,
-                        default=DEFAULT_LOGS_DIR, type=str,
-                        help="Path to output logs directory")
-    parser.add_argument("--nb_episode", required=False,
-                        default=DEFAULT_NB_EPISODE, type=int,
-                        help="Number of episodes to evaluate")
-    parser.add_argument("--nb_process", required=False,
-                        default=DEFAULT_NB_PROCESS, type=int,
-                        help="Number of cores to use")
-    parser.add_argument("--max_steps", required=False,
-                        default=DEFAULT_MAX_STEPS, type=int,
-                        help="Maximum number of steps per scenario")
-    parser.add_argument("--gif", action='store_true',
-                        help="Enable GIF Output")
-    parser.add_argument("--verbose", action='store_true',
-                        help="Verbose runner output")
-    parser.add_argument("--test", action='store_true',
-                        help="Use test mode")
-    parser.add_argument("--use_lightsim", action='store_true', default=True,
-                        help="Use LightSimBackend (default: True)")
-    parser.add_argument("--iter_num", required=False,
-                        default=None, type=int,
-                        help="Which training iteration to restore (None means the last one)")
-    return parser.parse_args()
+try:
+    from stable_baselines3 import PPO
+    from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
+    _CAN_USE_STABLE_BASELINE = True
+except ImportError:
+    _CAN_USE_STABLE_BASELINE = False
+    raise ImportError(
+        "stable_baselines3 is required. Install with: pip install stable-baselines3[extra]"
+    )
 
 
-def evaluate(env,
-             load_path=DEFAULT_LOAD_PATH,
-             name=DEFAULT_NAME,
-             logs_path=DEFAULT_LOGS_DIR,
-             nb_episode=DEFAULT_NB_EPISODE,
-             nb_process=DEFAULT_NB_PROCESS,
-             max_steps=DEFAULT_MAX_STEPS,
-             verbose=False,
-             save_gif=False,
-             gymenv_class=GymEnv,
-             gymenv_kwargs=None,
-             obs_space_kwargs=None,
-             act_space_kwargs=None,
-             iter_num=None,
-             **kwargs):
-    """
-    This function will use stable baselines 3 to evaluate a previously trained
-    PPO agent (with stable baselines 3) on
-    a grid2op environment "env".
+# ============================================================================
+# 约定：标准路径结构
+# ============================================================================
+# 模型保存路径约定: {save_path}/{name}/
+#   - {name}.zip                    # 模型文件
+#   - vec_normalize.pkl             # 归一化统计（如果使用）
+#   - obs_attr_to_keep.json         # 观察属性配置
+#   - act_attr_to_keep.json         # 动作属性配置
+# ============================================================================
 
-    It will use the grid2op "gym_compat" module to convert the action space
-    to a BoxActionSpace and the observation to a BoxObservationSpace.
 
-    It is suited for the studying the impact of continuous actions:
-
-    - on storage units
-    - on dispatchable generators
-    - on generators with renewable energy sources
-
-    Parameters
-    ----------
-    env: :class:`grid2op.Environment`
-        Then environment on which you need to train your agent.
-
-    name: ``str```
-        The name of your agent.
-
-    load_path: ``str``
-        If you want to reload your baseline, specify the path where it is located. **NB** if a baseline is reloaded
-        some of the argument provided to this function will not be used.
-
-    logs_dir: ``str``
-        Where to store the tensorboard generated logs during the training. ``None`` if you don't want to log them.
+def get_available_obs_attributes(env) -> List[str]:
+    """自动检测可用的观察属性"""
+    priority_attrs = [
+        "day_of_week", "hour_of_day", "minute_of_hour",
+        "prod_p", "prod_v", "load_p", "load_q",
+        "actual_dispatch", "target_dispatch",
+        "topo_vect", "time_before_cooldown_line", "time_before_cooldown_sub",
+        "rho", "timestep_overflow", "line_status",
+        "storage_power", "storage_charge",
+    ]
     
-    nb_episode: ``str``
-        How many episodes to run during the assessment of the performances
-
-    nb_process: ``int``
-        On how many process the assessment will be made. (setting this > 1 can lead to some speed ups but can be
-        unstable on some plaform)
-
-    max_steps: ``int``
-        How many steps at maximum your agent will be assessed
-
-    verbose: ``bool``
-        Currently un used
-
-    save_gif: ``bool``
-        Whether or not you want to save, as a gif, the performance of your agent. It might cause memory issues (might
-        take a lot of ram) and drastically increase computation time.
-
-    gymenv_class: 
-        The class to use as a gym environment. By default `GymEnv` (from module grid2op.gym_compat)
+    available_attrs = []
+    try:
+        obs = env.reset()
+        for attr_name in priority_attrs:
+            if hasattr(obs, attr_name):
+                try:
+                    if getattr(obs, attr_name) is not None:
+                        available_attrs.append(attr_name)
+                except (AttributeError, TypeError, ValueError):
+                    pass
+    except Exception:
+        # 降级到基本属性
+        available_attrs = ["prod_p", "load_p", "rho", "line_status"]
     
-    gymenv_kwargs: ``dict``
-        Extra key words arguments to build the gym environment.
+    if not available_attrs:
+        raise ValueError("No valid observation attributes found!")
+    return available_attrs
+
+
+def get_available_act_attributes(env) -> List[str]:
+    """自动检测可用的动作属性"""
+    priority_attrs = ["redispatch", "curtail", "set_storage"]
+    available_attrs = []
+    act_space = env.action_space
     
-    iter_num:
-        Which training iteration do you want to restore (by default: None means 
-        "the last one")
-        
-    kwargs:
-        extra parameters passed to the PPO from stable baselines 3
-
-    Returns
-    -------
-
-    baseline: 
-        The loaded baseline as a stable baselines PPO element.
-
-    Examples
-    ---------
-
-    Here is an example on how to evaluate an  PPO agent (previously trained
-    with stable baselines3):
-
-    .. code-block:: python
-
-        import grid2op
-        from grid2op.Reward import LinesCapacityReward  # or any other rewards
-        from lightsim2grid import LightSimBackend  # highly recommended !
-        from l2rpn_baselines.PPO_SB3 import evaluate
-
-        nb_episode = 7
-        nb_process = 1
-        verbose = True
-
-        env_name = "l2rpn_case14_sandbox"
-        env = grid2op.make(env_name,
-                           reward_class=LinesCapacityReward,
-                           backend=LightSimBackend()
-                           )
-
+    for attr_name in priority_attrs:
         try:
-            evaluate(env,
-                    nb_episode=nb_episode,
-                    load_path="./saved_model",  # should be the same as what has been called in the train function !
-                    name="test",  # should be the same as what has been called in the train function !
-                    nb_process=1,
-                    verbose=verbose,
-                    )
+            if act_space.supports_type(attr_name):
+                available_attrs.append(attr_name)
+        except Exception:
+            pass
+    
+    if not available_attrs:
+        raise ValueError("No valid action attributes found!")
+    return available_attrs
 
-            # you can also compare your agent with the do nothing agent relatively
-            # easily
-            runner_params = env.get_params_for_runner()
-            runner = Runner(**runner_params)
 
-            res = runner.run(nb_episode=nb_episode,
-                            nb_process=nb_process
-                            )
+def make_grid2op_gym_env(env, obs_attr_to_keep: List[str], act_attr_to_keep: List[str]):
+    """创建 Gym 兼容的 Grid2Op 环境"""
+    env_gym = GymEnv(env)
+    env_gym.observation_space.close()
+    env_gym.observation_space = BoxGymObsSpace(
+        env.observation_space,
+        attr_to_keep=obs_attr_to_keep
+    )
+    env_gym.action_space.close()
+    env_gym.action_space = BoxGymActSpace(
+        env.action_space,
+        attr_to_keep=act_attr_to_keep
+    )
+    return env_gym
 
-            # Print summary
-            if verbose:
-                print("Evaluation summary for DN:")
-                for _, chron_name, cum_reward, nb_time_step, max_ts in res:
-                    msg_tmp = "chronics at: {}".format(chron_name)
-                    msg_tmp += "\ttotal score: {:.6f}".format(cum_reward)
-                    msg_tmp += "\ttime steps: {:.0f}/{:.0f}".format(nb_time_step, max_ts)
-                    print(msg_tmp)
-        finally:
-            env.close()
 
+def _find_model_dir(load_path: str, name: str) -> str:
     """
+    查找模型目录（约定：load_path/name 或 load_path 本身）
     
-    if obs_space_kwargs is None:
-        obs_space_kwargs = {}
-    if act_space_kwargs is None:
-        act_space_kwargs = {}
-
-    # load the attributes kept
-    my_path = os.path.join(load_path, name)
-    if not os.path.exists(load_path):
-        os.mkdir(load_path)
-    if not os.path.exists(my_path):
-        os.mkdir(my_path)
-        
-    with open(os.path.join(my_path, "obs_attr_to_keep.json"), encoding="utf-8", mode="r") as f:
-        obs_attr_to_keep = json.load(fp=f)
-    with open(os.path.join(my_path, "act_attr_to_keep.json"), encoding="utf-8", mode="r") as f:
-        act_attr_to_keep = json.load(fp=f)
-
-    # create the action and observation space
-    gym_observation_space =  BoxGymObsSpace(env.observation_space,
-                                            attr_to_keep=obs_attr_to_keep,
-                                            **obs_space_kwargs)
-    gym_action_space = BoxGymActSpace(env.action_space,
-                                      attr_to_keep=act_attr_to_keep,
-                                      **act_space_kwargs)
+    Returns:
+        模型所在的基础目录路径
+    """
+    candidates = [
+        os.path.join(load_path, name),  # 标准结构
+        load_path,  # load_path 本身就是模型目录
+    ]
     
-    if os.path.exists(os.path.join(my_path, ".normalize_act")):
-        for attr_nm in act_attr_to_keep:
-            if (("multiply" in act_space_kwargs and attr_nm in act_space_kwargs["multiply"]) or 
-                ("add" in act_space_kwargs and attr_nm in act_space_kwargs["add"]) 
-               ):
-                continue
-            gym_action_space.normalize_attr(attr_nm)
-
-    if os.path.exists(os.path.join(my_path, ".normalize_obs")):
-        for attr_nm in obs_attr_to_keep:
-            if (("divide" in obs_space_kwargs and attr_nm in obs_space_kwargs["divide"]) or 
-                ("subtract" in obs_space_kwargs and attr_nm in obs_space_kwargs["subtract"]) 
-               ):
-                continue
-            gym_observation_space.normalize_attr(attr_nm)
+    for base_dir in candidates:
+        # 检查模型文件是否存在
+        model_file = os.path.join(base_dir, f"{name}.zip")
+        if os.path.exists(model_file):
+            return base_dir
+        # 检查 best_model
+        best_model = os.path.join(base_dir, "best_model.zip")
+        if os.path.exists(best_model):
+            return base_dir
     
-    gymenv = None
-    if gymenv_class is not None and issubclass(gymenv_class, GymEnvWithHeuristics):
-        if gymenv_kwargs is None:
-            gymenv_kwargs = {}
-        gymenv = gymenv_class(env, **gymenv_kwargs)
-        
-        gymenv.action_space.close()
-        gymenv.action_space = gym_action_space
-        
-        gymenv.observation_space.close()
-        gymenv.observation_space = gym_observation_space
-        
-    # create a grid2gop agent based on that (this will reload the save weights)
-    full_path = os.path.join(load_path, name)
-    grid2op_agent = SB3Agent(env.action_space,
-                             gym_action_space,
-                             gym_observation_space,
-                             nn_path=os.path.join(full_path, name),
-                             gymenv=gymenv,
-                             iter_num=iter_num,
-                             )
+    # 找不到模型文件
+    searched = [os.path.join(c, f"{name}.zip") for c in candidates]
+    raise FileNotFoundError(
+        f"无法找到模型文件。搜索路径:\n" + "\n".join(f"  - {p}" for p in searched)
+    )
 
+
+def _load_attributes(base_dir: str, env, verbose: bool):
+    """加载训练时保存的属性配置"""
+    obs_attr_path = os.path.join(base_dir, "obs_attr_to_keep.json")
+    act_attr_path = os.path.join(base_dir, "act_attr_to_keep.json")
+    
+    # 加载观察属性
+    if os.path.exists(obs_attr_path):
+        with open(obs_attr_path, "r", encoding="utf-8") as f:
+            obs_attr_to_keep = json.load(f)
+        if verbose:
+            print(f"✓ 加载了 {len(obs_attr_to_keep)} 个观察属性")
+    else:
+        warnings.warn(f"未找到 obs_attr_to_keep.json，将自动检测")
+        obs_attr_to_keep = get_available_obs_attributes(env)
+    
+    # 加载动作属性
+    if os.path.exists(act_attr_path):
+        with open(act_attr_path, "r", encoding="utf-8") as f:
+            act_attr_to_keep = json.load(f)
+        if verbose:
+            print(f"✓ 加载了 {len(act_attr_to_keep)} 个动作属性")
+    else:
+        warnings.warn(f"未找到 act_attr_to_keep.json，将自动检测")
+        act_attr_to_keep = get_available_act_attributes(env)
+    
+    return obs_attr_to_keep, act_attr_to_keep
+
+
+def evaluate(
+    env,
+    load_path: str = ".",
+    name: str = "PPO_SB3",
+    logs_path: Optional[str] = None,
+    nb_episode: int = 1,
+    nb_process: int = 1,
+    max_steps: int = -1,
+    verbose: bool = False,
+    save_gif: bool = False,
+    iter_num: Optional[int] = None,
+    **kwargs
+):
+    """
+    评估训练好的 PPO 智能体
+    
+    约定：
+    - load_path: 模型保存的根目录（默认: "."）
+    - name: 模型名称（默认: "PPO_SB3"）
+    - 模型文件路径: {load_path}/{name}/{name}.zip
+    """
+    if not _CAN_USE_STABLE_BASELINE:
+        raise ImportError("stable_baselines3 is required")
+    
+    # 1. 查找模型目录
+    base_dir = _find_model_dir(load_path, name)
+    if verbose:
+        print(f"✓ 模型目录: {base_dir}")
+    
+    # 2. 加载属性配置
+    obs_attr_to_keep, act_attr_to_keep = _load_attributes(base_dir, env, verbose)
+    
+    # 3. 创建 Gym 环境
+    env_gym = make_grid2op_gym_env(env, obs_attr_to_keep, act_attr_to_keep)
+    
+    # 4. 检查 VecNormalize
+    vecnorm_path = os.path.join(base_dir, "vec_normalize.pkl")
+    use_vec_normalize = os.path.exists(vecnorm_path)
+    
+    eval_vec_env = None
+    if use_vec_normalize:
+        if verbose:
+            print("✓ 检测到 VecNormalize 统计，正在加载...")
+        eval_vec_env = DummyVecEnv([lambda: env_gym])
+        eval_vec_env = VecNormalize.load(vecnorm_path, eval_vec_env)
+        eval_vec_env.training = False
+        eval_vec_env.norm_reward = False
+    
+    # 5. 确定模型文件路径
+    if iter_num is not None:
+        model_file = os.path.join(base_dir, f"{name}_{iter_num}_steps.zip")
+    else:
+        model_file = os.path.join(base_dir, f"{name}.zip")
+        if not os.path.exists(model_file):
+            best_model = os.path.join(base_dir, "best_model.zip")
+            if os.path.exists(best_model):
+                model_file = best_model
+                if verbose:
+                    print("✓ 使用 best_model.zip")
+            else:
+                raise FileNotFoundError(f"模型文件不存在: {model_file}")
+    
+    # 6. 加载 PPO 模型
+    if verbose:
+        print(f"✓ 加载模型: {model_file}")
+    
+    custom_objects = {
+        "action_space": env_gym.action_space,
+        "observation_space": env_gym.observation_space
+    }
+    
+    try:
+        if use_vec_normalize:
+            model = PPO.load(model_file, env=eval_vec_env, custom_objects=custom_objects)
+        else:
+            model = PPO.load(model_file, env=env_gym, custom_objects=custom_objects)
+    except Exception as e:
+        raise RuntimeError(
+            f"模型加载失败: {e}\n"
+            "可能原因: 观察空间/动作空间与训练时不匹配"
+        ) from e
+    
+    # 7. 创建 SB3Agent（提供 nn_kwargs 以满足基类要求）
+    grid2op_agent = SB3Agent(
+        g2op_action_space=env.action_space,
+        gym_act_space=env_gym.action_space,
+        gym_obs_space=env_gym.observation_space,
+        nn_type=PPO,
+        nn_kwargs={"policy": "MlpPolicy", "env": env_gym},  # 占位符
+        gymenv=env_gym,
+        iter_num=iter_num,
+    )
+    # 手动设置已加载的模型
+    grid2op_agent.nn_model = model
+    
+    # 8. 如果使用 VecNormalize，重写 get_act 方法
+    if use_vec_normalize:
+        def normalized_get_act(gym_obs, reward, done):
+            if not isinstance(gym_obs, np.ndarray):
+                gym_obs = np.array(gym_obs)
+            obs_batch = eval_vec_env.normalize_obs(gym_obs.reshape(1, -1))
+            action, _ = grid2op_agent.nn_model.predict(obs_batch[0], deterministic=True)
+            return action
+        grid2op_agent.get_act = normalized_get_act
+    
+    # 9. 运行评估
     if nb_episode == 0:
         return grid2op_agent, []
     
-    # Build runner
     runner_params = env.get_params_for_runner()
     runner_params["verbose"] = verbose
-    runner = Runner(**runner_params,
-                    agentClass=None,
-                    agentInstance=grid2op_agent)
+    runner = Runner(**runner_params, agentClass=None, agentInstance=grid2op_agent)
     
-    # Run the agent on the scenarios
-    # If save_gif is True, ensure logs_path is set (required for saving GIFs)
-    if save_gif and logs_path is None:
-        logs_path = DEFAULT_LOGS_DIR
-    
-    if logs_path is not None:
+    if logs_path:
         os.makedirs(logs_path, exist_ok=True)
-
-    res = runner.run(path_save=logs_path,
-                     nb_episode=nb_episode,
-                     nb_process=nb_process,
-                     max_iter=max_steps,
-                     pbar=verbose,
-                     **kwargs)
-
-    # Print summary
-    print("Evaluation summary:")
-    for _, chron_name, cum_reward, nb_time_step, max_ts in res:
-        msg_tmp = "chronics at: {}".format(chron_name)
-        msg_tmp += "\ttotal reward: {:.6f}".format(cum_reward)
-        msg_tmp += "\ttime steps: {:.0f}/{:.0f}".format(nb_time_step, max_ts)
-        print(msg_tmp)
-
-    if save_gif:
-        # logs_path is guaranteed to be not None here (set above if needed)
-        if verbose:
-            print("Saving the gif of the episodes")
-        save_log_gif(logs_path, res)
+    
+    if verbose:
+        print(f"\n{'='*60}")
+        print(f"开始评估: {nb_episode} 个回合")
+        print(f"{'='*60}\n")
+    
+    res = runner.run(
+        path_save=logs_path,
+        nb_episode=nb_episode,
+        nb_process=nb_process,
+        max_iter=max_steps,
+        pbar=verbose,
+        **kwargs
+    )
+    
+    # 10. 打印评估摘要
+    if verbose and res:
+        print("\n" + "="*60)
+        print("评估摘要")
+        print("="*60)
+        total_reward = sum(r[2] for r in res)
+        total_steps = sum(r[3] for r in res)
+        completed = sum(1 for r in res if r[3] >= r[4])
+        
+        for _, chron_name, cum_reward, nb_time_step, max_ts in res:
+            print(f"场景: {chron_name}")
+            print(f"  总奖励: {cum_reward:.6f}")
+            print(f"  步数: {nb_time_step}/{max_ts}")
+            print(f"  完成: {'是' if nb_time_step >= max_ts else '否'}")
+        
+        print("\n" + "-"*60)
+        print(f"平均奖励: {total_reward / len(res):.6f}")
+        print(f"平均步数: {total_steps / len(res):.1f}")
+        print(f"完成率: {completed}/{len(res)} ({100*completed/len(res):.1f}%)")
+        print("="*60 + "\n")
+    
+    # 11. 保存 GIF（如果请求）
+    if save_gif and logs_path:
+        try:
+            save_log_gif(logs_path, res)
+        except Exception as e:
+            warnings.warn(f"保存 GIF 失败: {e}")
+    
+    # 12. 清理
+    env_gym.close()
+    if eval_vec_env:
+        eval_vec_env.close()
+    
     return grid2op_agent, res
 
 
 if __name__ == "__main__":
-    # Parse command line
-    args = cli()
-    
-    # Import grid2op modules
+    """命令行入口"""
     import grid2op
-    from grid2op.Reward import LinesCapacityReward, RedispReward
-    from grid2op.Action import TopologyChangeAction
-    from grid2op.Reward import BridgeReward, CloseToOverflowReward, DistanceReward
+    from l2rpn_baselines.utils import cli_eval
     
-    # Determine if data_dir is an environment name or path
+    args_cli = cli_eval().parse_args()
+    
     try:
-        # Try to use it as environment name first
-        if args.use_lightsim:
-            try:
-                from lightsim2grid import LightSimBackend
-                backend = LightSimBackend()
-            except ImportError:
-                print("Warning: lightsim2grid not available, using default backend")
-                backend = None
+        from lightsim2grid import LightSimBackend
+        backend = LightSimBackend()
+    except ImportError:
+        warnings.warn("lightsim2grid not available, using default backend")
+        backend = None
+    
+    try:
+        data_dir = getattr(args_cli, 'data_dir', None) or getattr(args_cli, 'load_path', None)
+        if data_dir:
+            env = grid2op.make(data_dir, backend=backend) if backend else grid2op.make(data_dir)
         else:
-            backend = None
-        
-        # Try to create environment with the name
-        if backend:
-            env = grid2op.make(args.data_dir,
-                               test=args.test,
-                               backend=backend,
-                               reward_class=RedispReward,
-                               action_class=TopologyChangeAction,
-                               other_rewards={
-                                   "bridge": BridgeReward,
-                                   "overflow": CloseToOverflowReward,
-                                   "distance": DistanceReward
-                               })
-        else:
-            env = grid2op.make(args.data_dir,
-                               test=args.test,
-                               reward_class=RedispReward,
-                               action_class=TopologyChangeAction,
-                               other_rewards={
-                                   "bridge": BridgeReward,
-                                   "overflow": CloseToOverflowReward,
-                                   "distance": DistanceReward
-                               })
+            env = grid2op.make(backend=backend) if backend else grid2op.make()
     except Exception as e:
-        # If it fails, try as a path
-        print(f"Warning: Could not create environment with name '{args.data_dir}': {e}")
-        print("Trying as a path...")
-        if args.use_lightsim:
-            try:
-                from lightsim2grid import LightSimBackend
-                backend = LightSimBackend()
-            except ImportError:
-                backend = None
-        else:
-            backend = None
-        
-        if backend:
-            env = grid2op.make(args.data_dir,
-                               backend=backend,
-                               reward_class=RedispReward,
-                               action_class=TopologyChangeAction,
-                               other_rewards={
-                                   "bridge": BridgeReward,
-                                   "overflow": CloseToOverflowReward,
-                                   "distance": DistanceReward
-                               })
-        else:
-            env = grid2op.make(args.data_dir,
-                               reward_class=RedispReward,
-                               action_class=TopologyChangeAction,
-                               other_rewards={
-                                   "bridge": BridgeReward,
-                                   "overflow": CloseToOverflowReward,
-                                   "distance": DistanceReward
-                               })
+        warnings.warn(f"环境创建失败: {e}，使用默认环境")
+        env = grid2op.make(backend=backend) if backend else grid2op.make()
     
-    # Call evaluation interface
     try:
-        trained_agent, res_eval = evaluate(
+        evaluate(
             env,
-            load_path=args.load_path,
-            name=args.name,
-            logs_path=args.logs_dir,
-            nb_episode=args.nb_episode,
-            nb_process=args.nb_process,
-            max_steps=args.max_steps,
-            verbose=args.verbose,
-            save_gif=args.gif,
-            iter_num=args.iter_num,
+            load_path=args_cli.load_path,
+            logs_path=args_cli.logs_path,
+            nb_episode=args_cli.nb_episode,
+            nb_process=args_cli.nb_process,
+            max_steps=args_cli.max_steps,
+            verbose=args_cli.verbose,
+            save_gif=args_cli.save_gif,
         )
     finally:
         env.close()

@@ -25,6 +25,7 @@ if __name__ == "__main__":
         }
     )
     
+    logs_path="./result/wcci-2020/optimcvxpy-baseline"
     # Evaluate agent
     res = evaluate(env, nb_episode=7,
                    margin_th_limit=0.9,
@@ -35,5 +36,5 @@ if __name__ == "__main__":
                    penalty_redispatching_unsafe=0.01,
                 #    alpha_por_error=0.5,
                 #    weight_redisp_target=0.3,
-                   verbose=True, save_gif=True)
+                   verbose=True, save_gif=True, logs_path=logs_path)
 

@@ -103,11 +103,16 @@ class ExpertInsightService:
                 additional_cuts, lines_considered = self._additional_lines_to_cut(ltc)
                 ltc_already_considered.extend(lines_considered)
                 
+                # === FIX START: 显式转换类型，防止 np.int64 导致索引报错 ===
+                ltc_native = int(ltc)
+                # === FIX END ===
+                
                 # 模拟
                 simulator = Grid2opSimulation(
                     observation, self.action_space, self.observation_space,
                     param_options=self.config, debug=False,
-                    ltc=[ltc], reward_type=self.reward_type
+                    ltc=[ltc_native], # 修改此处：使用转换后的原生 int
+                    reward_type=self.reward_type
                 )
                 
                 ranked_combinations, expert_results, actions = expert_operator(simulator, plot=False, debug=False)

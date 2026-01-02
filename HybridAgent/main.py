@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-OptAgent 使用示例
-参考 OptimCVXPY 和 ExpertAgent 的 main.py
+HybridAgent 使用示例
 """
 
 import sys
@@ -28,7 +27,7 @@ from evaluate import evaluate
 if __name__ == "__main__":
     # 创建环境
     env = grid2op.make(
-        "l2rpn_wcci_2020",
+        "l2rpn_neurips_2020_track2_small",
         reward_class=RedispReward,
         backend=LightSimBackend(),
         other_rewards={
@@ -37,27 +36,21 @@ if __name__ == "__main__":
             "distance": DistanceReward
         }
     )
+    logs_path="./result/neurips-2020/hybrid"
+    # 使用 HybridAgent
+    print("使用 HybridAgent (OptimCVXPY + LLM Topology)")
     
-    # 使用 OptAgent
-    print("使用 OptAgent (Optimization-Augmented ReAct)")
-
-    logs_path="./result/wcci-2020/optllm"
-    
-    # 评估 OptAgent
-    # 注意：需要配置 LLM API Key（通过环境变量或参数）
-    # 环境变量: CLOUD_API_KEY, CLOUD_BASE_URL, CLOUD_MODEL
+    # 评估 HybridAgent
     res = evaluate(
         env,
         nb_episode=7,
         verbose=True,
-        save_gif=True,  # 如果需要 GIF，设置为 True（需要 l2rpn_baselines）
-        # 场景选择：指定要运行的场景编号（可选）
-        episode_id=[0,1,2,3,4,5,6],  # 指定场景编号列表
-        # env_seeds=[0, 1, 2, 3, 4, 5, 6],   # 指定环境随机种子（可选）
-        llm_trigger_rho=0.95,  # LLM 激活阈值：当负载率 >= 95% 时调用 LLM
-        rho_safe=0.85,  # OptimCVXPY 安全阈值
-        rho_danger=0.95,  # OptimCVXPY 危险阈值
-        llm_temperature=0.7,
+        save_gif=True,
+        episode_id=[0,1,2,3,4,5,6],
+        max_steps=-1,
+        rho_safe=0.85,
+        rho_danger=0.95,
+        rho_llm_threshold=0.95,
         logs_path=logs_path
     )
     

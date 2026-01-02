@@ -38,9 +38,9 @@ except ImportError:
 if __name__ == "__main__":
     # 创建环境
     env = grid2op.make(
-        "l2rpn_case14_sandbox",
+        "l2rpn_wcci_2020",
         reward_class=RedispReward,
-        backend=PandaPowerBackend(),
+        backend=LightSimBackend(),
         other_rewards={
             "bridge": BridgeReward,
             "overflow": CloseToOverflowReward,
@@ -48,9 +48,7 @@ if __name__ == "__main__":
         }
     )
     
-    # 评估 Agent
-    # 注意：需要配置 LLM API Key（通过环境变量或参数）
-    # 环境变量: CLOUD_API_KEY, CLOUD_BASE_URL, CLOUD_MODEL
+    logs_path="./result/wcci-2020/ada-planner"
     res = evaluate(
         env,
         nb_episode=7,
@@ -59,6 +57,11 @@ if __name__ == "__main__":
         max_react_steps=3,  # ADA_Planner 循环最大重试次数
         rho_danger=0.95,  # 启发式策略：当负载率超过 92% 时调用 LLM（预防性调度，避免等到过载）
         llm_temperature=0.7,
+        # 场景选择：指定要运行的场景编号（可选）
+        episode_id=[0,1,2,3,4,5,6],  # 指定场景编号列表
+        # env_seeds=42,
+        # env_seeds=[0, 1, 2, 3, 4, 5, 6],   # 指定环境随机种子（可选）
+        logs_path=logs_path
     )
     
     print("\n评估完成！")

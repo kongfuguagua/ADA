@@ -67,7 +67,7 @@ class ADA_Planner(BaseAgent):
         max_react_steps: int = 3,
         name: str = "ADA_Planner",
         rho_danger: float = 0.92, # 降低默认阈值以实现预防性调度
-        grid_name: str = "IEEE14",  # 用于 ExpertInsight
+        grid_name: str = "IEEE118",  # 用于 ExpertInsight
         use_expert_insight: bool = True,  # 是否启用专家洞察
         **kwargs
     ):

@@ -17,9 +17,11 @@ __all__ = [
 ]
 
 from l2rpn_baselines.PPO_SB3.utils import SB3Agent as PPO_SB3
-from l2rpn_baselines.PPO_SB3.utils import (default_act_attr_to_keep,
-                                           default_obs_attr_to_keep,
-                                           remove_non_usable_attr,
-                                           save_used_attribute)
+from l2rpn_baselines.PPO_SB3.utils import (
+    default_act_attr_to_keep,
+    default_obs_attr_to_keep,
+    remove_non_usable_attr,
+    save_used_attribute
+)
 from l2rpn_baselines.PPO_SB3.evaluate import evaluate
 from l2rpn_baselines.PPO_SB3.train import train
