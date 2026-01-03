@@ -16,7 +16,7 @@ if __name__ == "__main__":
 
     # 使用标准环境名称
     env = grid2op.make(
-        "l2rpn_neurips_2020_track2_small",
+        "l2rpn_case14_sandbox",
         reward_class=RedispReward,
         backend=LightSimBackend(),
         other_rewards={
@@ -25,7 +25,7 @@ if __name__ == "__main__":
             "distance": DistanceReward
         }
     )
-    logs_path = "./result/neurips-2020/expert-agent-baseline"
+    logs_path = "./result/ijcnn2019/GreedyOpt"
     # Evaluate agent
-    res = evaluate(env, nb_episode=7, verbose=True, save_gif=True, grid="IEEE118",logs_path=logs_path)
+    res = evaluate(env, nb_episode=7, verbose=True, save_gif=True, grid="IEEE14",logs_path=logs_path)
 

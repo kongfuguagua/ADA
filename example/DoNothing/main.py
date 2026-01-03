@@ -5,7 +5,7 @@ from lightsim2grid import LightSimBackend
 
 # 使用标准环境名称
 env = grid2op.make(
-    "l2rpn_wcci_2022",
+    "l2rpn_case14_sandbox",
     reward_class=RedispReward,
     backend=LightSimBackend(),
     other_rewards={
@@ -14,5 +14,5 @@ env = grid2op.make(
         "distance": DistanceReward
     }
 )
-logs_path = "./result/wcci-2022/all_do-nothing-baseline"
-res = evaluate(env, nb_episode=10000, verbose=True, save_gif=True,logs_path=logs_path)
+logs_path = "./result/ijcnn2019/DoNothing"
+res = evaluate(env, nb_episode=7, verbose=True, save_gif=True,logs_path=logs_path)

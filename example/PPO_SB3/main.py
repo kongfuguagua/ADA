@@ -42,7 +42,7 @@ except ImportError:
 # ============================================================================
 MODEL_NAME = "PPO_SB3"                    # 模型名称（与训练时一致）
 MODEL_LOAD_PATH = "./rl_saved_model"      # 模型根目录
-LOGS_PATH = "./logs-eval/ppo-sb3-baseline"  # 评估日志目录
+LOGS_PATH = "./result/nips2020/SAC"  # 评估日志目录
 NB_EPISODE = 7                            # 评估回合数
 # ============================================================================
 
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     # 1. 创建环境
     print("\n[1/3] 创建环境...")
     env = grid2op.make(
-        "l2rpn_case14_sandbox",
+        "l2rpn_neurips_2020_track2_small",
         reward_class=RedispReward,
         backend=LightSimBackend(),
         other_rewards={

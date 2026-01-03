@@ -58,7 +58,7 @@ if __name__ == "__main__":
         save_gif=True,  # 如果需要 GIF，设置为 True（需要 l2rpn_baselines）
         grid_name="IEEE118",
         # 场景选择：指定要运行的场景编号（可选）
-        episode_id=[0],  # 指定场景编号列表
+        episode_id=[4],  # 指定场景编号列表
         # env_seeds=42,
         # env_seeds=[0, 1, 2, 3, 4, 5, 6],   # 指定环境随机种子（可选）
         rho_danger=0.95,  # 危险阈值：当负载率 > 95% 时调用 Judger

@@ -36,7 +36,7 @@ if __name__ == "__main__":
             "distance": DistanceReward
         }
     )
-    logs_path="./result/neurips-2020/hybrid"
+    logs_path="./result/nips2020/hybrid"
     # 使用 HybridAgent
     print("使用 HybridAgent (OptimCVXPY + LLM Topology)")
     

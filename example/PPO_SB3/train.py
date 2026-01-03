@@ -39,6 +39,33 @@ except ImportError:
     _CAN_USE_SWANLAB = False
     SwanLabCallback = None
 
+# GPU detection utility
+def get_device(use_gpu=True):
+    """
+    Get the appropriate device for training.
+    
+    Parameters
+    ----------
+    use_gpu: ``bool```
+        Whether to try using GPU.
+    
+    Returns
+    -------
+    device: ``str```
+        Device string ("cuda" or "cpu").
+    """
+    if not use_gpu:
+        return "cpu"
+    
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return "cuda"
+        else:
+            return "cpu"
+    except ImportError:
+        return "cpu"
+
 
 # Priority list of observation attributes (in order of importance)
 PRIORITY_OBS_ATTRS = [
@@ -236,6 +263,7 @@ def train(env,
           clip_reward=10.0,
           gamma=0.99,
           seed=None,
+          use_gpu=True,
           use_swanlab=True,
           swanlab_project="PPO_SB3",
           swanlab_experiment_name=None,
@@ -305,6 +333,10 @@ def train(env,
     seed: ``int```
         Random seed.
 
+    use_gpu: ``bool```
+        Whether to use GPU for training (if available). Defaults to True.
+        Will automatically fall back to CPU if GPU is not available.
+
     use_swanlab: ``bool```
         Use SwanLab for logging (if available).
 
@@ -328,6 +360,20 @@ def train(env,
     if not _CAN_USE_STABLE_BASELINE:
         raise ImportError("Cannot use this function as stable baselines3 is not installed")
     
+    # Determine device (GPU/CPU)
+    device = get_device(use_gpu)
+    if verbose:
+        if device == "cuda":
+            try:
+                import torch
+                gpu_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "Unknown"
+                gpu_count = torch.cuda.device_count()
+                print(f"Using GPU: {gpu_name} (Device count: {gpu_count})")
+            except:
+                print("Using GPU: CUDA available")
+        else:
+            print("Using CPU (GPU not available or disabled)")
+    
     # Set random seed
     if seed is not None:
         np.random.seed(seed)
@@ -336,6 +382,8 @@ def train(env,
         try:
             import torch
             torch.manual_seed(seed)
+            if device == "cuda":
+                torch.cuda.manual_seed_all(seed)
         except ImportError:
             pass
     
@@ -461,14 +509,15 @@ def train(env,
             policy_kwargs=policy_kwargs,
             tensorboard_log=tensorboard_log,
             verbose=1 if verbose else 0,
-            **{k: v for k, v in kwargs.items() if k != 'eval_env'}
+            **{k: v for k, v in kwargs.items() if k != 'eval_env'},
+            device=device
         )
     else:
         # Load existing model
         if verbose:
             print(f"Loading model from {load_path}...")
         model_path = os.path.join(load_path, name, name)
-        model = PPO.load(model_path, env=vec_env)
+        model = PPO.load(model_path, env=vec_env, device=device)
         
         # Load VecNormalize stats if they exist
         if use_vec_normalize and save_path is not None:
@@ -612,7 +661,7 @@ if __name__ == "__main__":
     print("\n[1/3] 创建环境...")
     
     env = grid2op.make(
-        "l2rpn_wcci_2020",
+        "l2rpn_wcci_2022",
         reward_class=RedispReward,
         backend=LightSimBackend(),
         other_rewards={
@@ -632,9 +681,9 @@ if __name__ == "__main__":
             iterations=5000000,  # 总环境步数（推荐 >= 100,000）
             save_path="./rl_saved_model",  # 约定：模型保存根目录
             logs_dir="./rl_logs",  # 约定：日志保存目录
-            save_every_xxx_steps=10000,  # 每 10k 步保存检查点
-            eval_every_xxx_steps=10000,  # 每 10k 步评估（需要 eval_env）
-            n_envs=32,  # 并行环境数
+            save_every_xxx_steps=1000000,  # 每 10k 步保存检查点
+            eval_every_xxx_steps=100000,  # 每 10k 步评估（需要 eval_env）
+            n_envs=64,  # 并行环境数
             seed=42,
             use_swanlab=True,
             swanlab_project="Grid2Op_PPO",
