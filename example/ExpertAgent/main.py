@@ -25,7 +25,7 @@ if __name__ == "__main__":
             "distance": DistanceReward
         }
     )
-    logs_path = "./result/ijcnn2019/GreedyOpt"
+    logs_path = "./result/ijcnn2019/GreedyOpt1"
     # Evaluate agent
-    res = evaluate(env, nb_episode=7, verbose=True, save_gif=True, grid="IEEE14",logs_path=logs_path)
+    res = evaluate(env, nb_episode=7, verbose=True, save_gif=True, grid="IEEE9",logs_path=logs_path)
 

@@ -10,6 +10,7 @@ from grid2op.Reward import BaseReward, L2RPNReward
 import numpy as np
 import pandas as pd
 import logging
+import re
 
 try:
     from alphaDeesp.expert_operator import expert_operator
@@ -105,13 +106,16 @@ class ExpertAgent(BaseAgent):
                 for sub_id in self.sub_2nodes:
                     action = self.recover_reference_topology(observation, sub_id)
                     if action is not None:
-                        return action
+                        # Filter action based on grid_name rules
+                        if not self.should_filter_action(action):
+                            return action
             # or we try to reconnect a line if possible
             action = self.reco_line(observation)
             if action is not None:
-                return action
-            else:
-                return self.action_space({})
+                # Filter action based on grid_name rules (line reconnection doesn't affect substations, so should pass)
+                if not self.should_filter_action(action):
+                    return action
+            return self.action_space({})
         # otherwise, we try to solve it
         else:
             best_action = self.action_space({})  # instantiate an action with do nothing action
@@ -221,10 +225,105 @@ class ExpertAgent(BaseAgent):
 
             if (subID_ToSplitOn != -1):
                 self.sub_2nodes.add(int(subID_ToSplitOn))
+            
+            # Filter action based on grid_name: reject actions operating on nodes beyond grid size
+            if self.should_filter_action(best_action):
+                logging.info(f"Action filtered: operating on nodes beyond grid size limit for {self.grid}")
+                best_action = self.action_space({})  # return empty action
+            
             logging.info("action we take is:")
             logging.info(best_action)
             return best_action
 
+    def should_filter_action(self, action):
+        """
+        Check if action should be filtered based on grid_name rules.
+        Extract the number after "IEEE" from grid_name and reject actions operating on 
+        any substation/node with ID greater than that number.
+        
+        Parameters
+        ----------
+        action: :class:`grid2op.Action.PlayableAction`
+            The action to check
+            
+        Returns
+        -------
+        bool
+            True if action should be filtered (rejected), False otherwise
+        """
+        # Extract the number after "IEEE" from grid_name (e.g., "IEEE9" -> 9, "IEEE14" -> 14)
+        grid_upper = self.grid.upper()
+        match = re.search(r'IEEE(\d+)', grid_upper)
+        if not match:
+            return False
+        
+        max_node_id = int(match.group(1)) - 1  # IEEE9 means nodes 0-8, so max is 8 (9-1)
+        
+        # Check if action operates on any substation/node with ID > max_node_id
+        try:
+            # Method 1: Check set_bus substations_id - extract substation IDs
+            if hasattr(action, 'set_bus'):
+                set_bus = action.set_bus
+                if set_bus is not None:
+                    # Check substations_id format: [(sub_id, topo_vec), ...]
+                    if hasattr(set_bus, 'substations_id'):
+                        subs_data = set_bus.substations_id
+                        if subs_data is not None:
+                            if isinstance(subs_data, list):
+                                for item in subs_data:
+                                    if isinstance(item, (tuple, list)) and len(item) >= 1:
+                                        sub_id = int(item[0])
+                                        if sub_id > max_node_id:
+                                            return True
+                            elif isinstance(subs_data, dict):
+                                # If it's a dict, check all values
+                                for key, value in subs_data.items():
+                                    if isinstance(value, list):
+                                        for item in value:
+                                            if isinstance(item, (tuple, list)) and len(item) >= 1:
+                                                sub_id = int(item[0])
+                                                if sub_id > max_node_id:
+                                                    return True
+                    
+                    # Also check individual element assignments (loads_id, generators_id, etc.)
+                    # These might reference substations indirectly, but we check the element IDs
+                    # For IEEE9, we mainly care about substation IDs in substations_id
+            
+            # Method 2: Try as_dict() method to get all substation IDs
+            if hasattr(action, 'as_dict'):
+                action_dict = action.as_dict()
+                if 'set_bus' in action_dict and action_dict['set_bus'] is not None:
+                    set_bus_data = action_dict['set_bus']
+                    if isinstance(set_bus_data, dict):
+                        # Check substations_id
+                        if 'substations_id' in set_bus_data:
+                            subs_data = set_bus_data['substations_id']
+                            if isinstance(subs_data, list):
+                                for item in subs_data:
+                                    if isinstance(item, (tuple, list)) and len(item) >= 1:
+                                        sub_id = int(item[0])
+                                        if sub_id > max_node_id:
+                                            return True
+                        
+                        # Check other element types (loads_id, generators_id, lines_or_id, lines_ex_id)
+                        # These don't directly contain substation IDs, but we can check if they reference
+                        # elements that belong to substations > 9 (this would require observation, so skip for now)
+            
+            # Method 3: Try impact_on_substation to get affected substation IDs
+            if hasattr(action, 'impact_on_substation'):
+                affected_subs = action.impact_on_substation()
+                if affected_subs is not None:
+                    # affected_subs is a boolean array, check indices > max_node_id
+                    for sub_id in range(len(affected_subs)):
+                        if sub_id > max_node_id and affected_subs[sub_id]:
+                            return True
+        except Exception as e:
+            logging.warning(f"Error checking action node IDs: {e}")
+            # If we can't determine, don't filter (safer to allow the action)
+            return False
+        
+        return False
+    
     def reset(self, observation):
         # No internal states to reset
         pass
