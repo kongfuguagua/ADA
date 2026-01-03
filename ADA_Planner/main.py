@@ -38,7 +38,7 @@ except ImportError:
 if __name__ == "__main__":
     # 创建环境
     env = grid2op.make(
-        "l2rpn_wcci_2020",
+        "l2rpn_neurips_2020_track2_small",
         reward_class=RedispReward,
         backend=LightSimBackend(),
         other_rewards={
@@ -48,7 +48,7 @@ if __name__ == "__main__":
         }
     )
     
-    logs_path="./result/wcci-2020/ada-planner"
+    logs_path="./result/nips2020/ada-planner"
     res = evaluate(
         env,
         nb_episode=7,

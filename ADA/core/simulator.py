@@ -131,13 +131,36 @@ class Simulator:
         ]
         
         if not safe_candidates:
-            logger.warning("Simulator: 没有安全动作")
-            # 返回评估过的动作中最好的（即使不安全）
-            if evaluated_candidates:
-                best = self._sort_candidates(evaluated_candidates)[0]
-                logger.warning(f"Simulator: 返回最佳不安全动作: {best}")
-                return best
-            return None
+            logger.warning("Simulator: 没有安全动作，将与 donothing 比较")
+            # 获取评估过的动作中最好的（即使不安全）
+            if not evaluated_candidates:
+                return None
+            
+            best_non_safe = self._sort_candidates(evaluated_candidates)[0]
+            
+            # 创建并评估 donothing 动作
+            donothing_action = self.action_space({})
+            donothing_result = self._simulate_single_action(observation, donothing_action)
+            
+            # 创建 donothing CandidateAction
+            donothing_candidate = CandidateAction(
+                source="DoNothing",
+                action_obj=donothing_action,
+                description="Do nothing action",
+                priority=0
+            )
+            donothing_candidate.update_simulation_result(**donothing_result)
+            
+            # 比较 best_non_safe 和 donothing，返回更好的
+            comparison_candidates = [best_non_safe, donothing_candidate]
+            best = self._sort_candidates(comparison_candidates)[0]
+            
+            logger.warning(
+                f"Simulator: 返回最佳动作（与donothing比较后）: {best.source} "
+                f"(rho_max={best.simulation_result.get('rho_max', 'N/A'):.3f}, "
+                f"reward={best.simulation_result.get('reward', 'N/A'):.2f})"
+            )
+            return best
         
         # 3. 排序并返回最优（动态排序权重）
         sorted_candidates = self._sort_candidates(
