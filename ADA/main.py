@@ -37,32 +37,33 @@ except ImportError:
 if __name__ == "__main__":
     # 创建环境
     env = grid2op.make(
-        "l2rpn_case14_sandbox",
+        "l2rpn_wcci_2022",
         reward_class=RedispReward,
         backend=LightSimBackend(),
         other_rewards={
             "bridge": BridgeReward,
             "overflow": CloseToOverflowReward,
             "distance": DistanceReward
-        }
+        },
+        # test=True,
     )
     
     # 评估 ADA Agent
     # 注意：需要配置 LLM API Key（通过环境变量或参数）
     # 环境变量: CLOUD_API_KEY, CLOUD_BASE_URL, CLOUD_MODEL
-    logs_path="./result/planner/ijcnn2019/ADA_0planner_0solver"
+    logs_path="./result/solver/wcci-2022/ADA_3"
     res = evaluate(
         env,
         nb_episode=7,
         verbose=True,
         save_gif=True,  # 如果需要 GIF，设置为 True（需要 l2rpn_baselines）
-        grid_name="IEEE9",
+        grid_name="IEEE118",
         # 场景选择：指定要运行的场景编号（可选）
         episode_id=[0,1,2,3,4,5,6],  # 指定场景编号列表
         # env_seeds=42,
         # env_seeds=[0, 1, 2, 3, 4, 5, 6],   # 指定环境随机种子（可选）
         rho_danger=0.95,  # 危险阈值：当负载率 > 95% 时调用 Judger
-        rho_safe=0.95,    # 安全阈值：当负载率 < 85% 时使用快速通道
+        rho_safe=0.85,    # 安全阈值：当负载率 < 85% 时使用快速通道，0solver为0.95，1solver=0.85
         max_planner_candidates=5,  # Planner 最大候选数
         max_llm_candidates=3,      # LLM 融合最大候选数
         enable_knowledge_base=True,  # 启用知识库

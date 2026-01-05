@@ -384,7 +384,7 @@ class Simulator:
                     -safety_score,      # 安全性
                     overflow_count,     # 过载数量
                     -reward,            # 奖励（优先级提升）
-                    rho_max,            # 最大负载率（优先级降低）
+                    # rho_max,            # 最大负载率（优先级降低）
                     -priority           # 优先级
                 )
             else:
